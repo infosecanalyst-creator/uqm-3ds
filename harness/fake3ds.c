@@ -36,17 +36,22 @@ void osSetSpeedupEnable (bool on) { (void) on; }
 
 /* ---- framebuffers ---- */
 static u32 fb[2][2][400 * 240];   /* [screen][buffer] */
+static u32 fb_right[2][400 * 240]; /* top screen, right eye, [buffer] */
+static int stereo3d;
 static int back[2] = { 1, 1 };
 static int swaps[2];
 
 void gfxInit (GSPGPU_FramebufferFormat a, GSPGPU_FramebufferFormat b, bool v) { (void) a; (void) b; (void) v; t_start = now_ms (); }
 void gfxExit (void) {}
-void gfxSet3D (bool on) { (void) on; }
+void gfxSet3D (bool on) { stereo3d = on; }
+/* UQM3DS_3D=<0..1>: the 3D slider */
+float osGet3DSliderState (void) { const char *e = getenv ("UQM3DS_3D"); return e ? (float) atof (e) : 0.0f; }
 u8 *gfxGetFramebuffer (gfxScreen_t s, gfx3dSide_t side, u16 *w, u16 *h)
 {
-	(void) side;
 	if (w) *w = 240;
 	if (h) *h = s == GFX_TOP ? 400 : 320;
+	if (s == GFX_TOP && side == GFX_RIGHT)
+		return (u8 *) fb_right[back[s]];
 	return (u8 *) fb[s][back[s]];
 }
 void gfxScreenSwapBuffers (gfxScreen_t s, bool st) { (void) st; back[s] ^= 1; ++swaps[s]; }
@@ -85,7 +90,27 @@ static void snap (const char *name)
 			}
 		fclose (f);
 	}
-	fprintf (stderr, "[harness] snap %s (swaps top %d bottom %d)\n", name, swaps[0], swaps[1]);
+	if (stereo3d)
+	{	/* the right eye of the top screen too */
+		char path[512];
+		FILE *f;
+		int x, y;
+		snprintf (path, sizeof path, "%s/%s_topR.ppm", dir, name);
+		if ((f = fopen (path, "wb")))
+		{
+			const u32 *p = fb_right[back[0] ^ 1];
+			fprintf (f, "P6\n400 240\n255\n");
+			for (y = 0; y < 240; ++y)
+				for (x = 0; x < 400; ++x)
+				{
+					u32 c = p[x * 240 + 239 - y];
+					unsigned char rgb[3] = { c >> 24, c >> 16, c >> 8 };
+					fwrite (rgb, 1, 3, f);
+				}
+			fclose (f);
+		}
+	}
+	fprintf (stderr, "[harness] snap %s (swaps top %d bottom %d, 3d %d)\n", name, swaps[0], swaps[1], stereo3d);
 }
 
 /* ---- scripted input ---- */

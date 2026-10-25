@@ -93,7 +93,66 @@ void port3ds_request_shortcut (int sc);
 int port3ds_shortcut_pending (int in_orbit);   /* game thread: open the menu? */
 int port3ds_take_shortcut (int in_orbit);      /* game thread: item, or -1 */
 int port3ds_take_gameopt (void);               /* game thread: 0 save, 1 load, -1 */
-void port3ds_game_frame (void);
+
+/* The game's own list menus as deck buttons (game3ds.c). Bases are UQM's
+ * PM_* values (menustat.h) or these: */
+#define P3M_MAIN 200
+/* copies of the menustat.h bases the deck names (checked in game3ds.c) */
+enum { PM3_SCAN = 0, PM3_STARMAP = 1, PM3_MIN_SCAN = 7, PM3_SAVE_GAME = 13,
+	PM3_CONVERSE = 18, PM3_FUEL = 21, PM3_CREW = 25, PM3_SOUND_ON = 28 };
+#define P3M_STARBASE 201
+#define P3_MENU_MAX 10
+typedef struct { int state; char label[32]; } Port3DSMenuItem;
+void port3ds_menu_seen (int base, void *pms, int cur);    /* game thread, each frame */
+int port3ds_menu_items (int *base, int *cur, Port3DSMenuItem *items, int max);
+void port3ds_menu_pick (int base, int state);
+
+/* Super Melee setup screen */
+enum { P3MO_CTRL_TOP, P3MO_LOAD_TOP, P3MO_SAVE_TOP, P3MO_BATTLE, P3MO_LOAD_BOT,
+	P3MO_SAVE_BOT, P3MO_CTRL_BOT, P3MO_QUIT, P3MO_NET_TOP, P3MO_NET_BOT };
+enum { P3MEL_NONE, P3MEL_OPTION, P3MEL_SHIP };
+typedef struct
+{
+	int active, net;
+	unsigned char ships[2][14];   /* team 0 is drawn on top */
+	int value[2];
+	char name[2][32];
+	int control[2];               /* PlayerControl[i]: 0 human, 1-3 cyborg, 4 net */
+} Port3DSMelee;
+int port3ds_melee_take (void *pms, int *a, int *b, int *c);  /* game thread */
+int port3ds_melee_read (Port3DSMelee *m);
+void port3ds_melee_option (int opt);
+void port3ds_melee_ship (int side, int slot, int ship);      /* ship 255 = empty */
+const char *port3ds_ship_short (int ship);
+/* choosing the next ship in a round: player 1 is drawn on top */
+#define P3_PICK_RANDOM (-2)
+int port3ds_pick_frame (int player, const int *species, int n);  /* game thread */
+int port3ds_pick_read (int player, unsigned char ships[14]);
+void port3ds_pick (int player, int slot);
+int port3ds_ship_cost (int ship);
+
+/* Super Melee network dialog (host/port/delay, connect or wait) */
+enum { P3ND_NONE, P3ND_CONNECT, P3ND_LISTEN, P3ND_CANCEL, P3ND_DELAY_DOWN,
+	P3ND_DELAY_UP, P3ND_HOST, P3ND_PORT };
+typedef struct { char host[64]; char port[16]; int delay, side; } Port3DSNetDlg;
+int port3ds_netdlg_frame (const char *host, const char *port, int delay, int side,
+		char *text_out, int text_size);           /* game thread */
+int port3ds_netdlg_read (Port3DSNetDlg *d);
+void port3ds_netdlg_act (int act, const char *text);
+
+/* Stereo 3D: a depth per pixel of the main screen, set by tags in the draw
+ * queue. Depth > 0 is behind the screen, < 0 in front of it. */
+void port3ds_depth_set (int depth);       /* game thread: tag what follows */
+void port3ds_space_batch (int on);        /* process.c around the display list */
+void port3ds_space_prim (int index);      /* frame.c, per display-list prim */
+void port3ds_depth_now (int depth);       /* render thread (queue callback) */
+void port3ds_depth_mark_rect (SDL_Surface *dst, int x, int y, int w, int h);
+void port3ds_depth_mark_blit (SDL_Surface *src, const SDL_Rect *sr,
+		SDL_Surface *dst, const SDL_Rect *dr);
+void port3ds_depth_mark_line (SDL_Surface *dst, int x1, int y1, int x2, int y2);
+void port3ds_set_main_screen (SDL_Surface *main);
+extern int port3ds_stereo_ok;             /* no fade or transition this frame */
+void port3ds_game_frame (void *input_state);   /* DoInput, before the InputFunc */
 
 /* comm.c PlayerResponseInput(), game thread, once per frame while the
  * player is choosing: publishes the replies, returns a reply tapped on

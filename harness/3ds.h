@@ -43,6 +43,7 @@ enum { GSPLCD_SCREEN_TOP = 1, GSPLCD_SCREEN_BOTTOM = 2 };
 void gfxInit (GSPGPU_FramebufferFormat top, GSPGPU_FramebufferFormat bottom, bool vram);
 void gfxExit (void);
 void gfxSet3D (bool on);
+float osGet3DSliderState (void);
 u8 *gfxGetFramebuffer (gfxScreen_t screen, gfx3dSide_t side, u16 *w, u16 *h);
 void gfxScreenSwapBuffers (gfxScreen_t screen, bool stereo);
 void gfxSwapBuffers (void);
@@ -75,7 +76,7 @@ Result svcGetThreadId (u32 *id, Handle h);
 Result svcGetThreadPriority (s32 *prio, Handle h);
 void svcSleepThread (s64 ns);
 
-typedef enum { SWKBD_TYPE_NORMAL = 0 } SwkbdType;
+typedef enum { SWKBD_TYPE_NORMAL = 0, SWKBD_TYPE_QWERTY, SWKBD_TYPE_NUMPAD, SWKBD_TYPE_WESTERN } SwkbdType;
 typedef enum { SWKBD_BUTTON_NONE = -1, SWKBD_BUTTON_LEFT = 0, SWKBD_BUTTON_MIDDLE, SWKBD_BUTTON_RIGHT,
 	SWKBD_BUTTON_CONFIRM = SWKBD_BUTTON_RIGHT } SwkbdButton;
 enum { SWKBD_NOTEMPTY_NOTBLANK = 3 };

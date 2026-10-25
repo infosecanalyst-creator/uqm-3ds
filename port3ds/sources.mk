@@ -1,7 +1,36 @@
 # UQM 0.8.0 sources for the 3DS build (pure SDL graphics, mixsdl audio,
-# internal mikmod, zip i/o, plain C, SDL threads, no netplay). Generated
+# internal mikmod, zip i/o, plain C, SDL threads, netplay over IPv4). Generated
 # from a desktop build.sh configured the same way, plus UQM's own regex.
 UQM_SOURCES := \
+	libs/network/netport.c \
+	libs/network/network_bsd.c \
+	libs/network/connect/connect.c \
+	libs/network/connect/listen.c \
+	libs/network/connect/resolve.c \
+	libs/network/netmanager/ndesc.c \
+	libs/network/netmanager/netmanager_bsd.c \
+	libs/network/socket/socket.c \
+	libs/network/socket/socket_bsd.c \
+	uqm/supermelee/netplay/checkbuf.c \
+	uqm/supermelee/netplay/checksum.c \
+	uqm/supermelee/netplay/crc.c \
+	uqm/supermelee/netplay/netconnection.c \
+	uqm/supermelee/netplay/netinput.c \
+	uqm/supermelee/netplay/netmelee.c \
+	uqm/supermelee/netplay/netmisc.c \
+	uqm/supermelee/netplay/netoptions.c \
+	uqm/supermelee/netplay/netrcv.c \
+	uqm/supermelee/netplay/netsend.c \
+	uqm/supermelee/netplay/netstate.c \
+	uqm/supermelee/netplay/notify.c \
+	uqm/supermelee/netplay/notifyall.c \
+	uqm/supermelee/netplay/packet.c \
+	uqm/supermelee/netplay/packethandlers.c \
+	uqm/supermelee/netplay/packetsenders.c \
+	uqm/supermelee/netplay/packetq.c \
+	uqm/supermelee/netplay/proto/npconfirm.c \
+	uqm/supermelee/netplay/proto/ready.c \
+	uqm/supermelee/netplay/proto/reset.c \
 	libs/callback/alarm.c \
 	libs/callback/async.c \
 	libs/callback/callback.c \

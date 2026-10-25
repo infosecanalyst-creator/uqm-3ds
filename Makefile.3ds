@@ -29,6 +29,7 @@ ARCH   := -march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft
 # default). -O2 rather than UQM's desktop -O3: smaller code fits the ARM11's 16 KB
 # instruction cache better, which matters more here than unrolling.
 CFLAGS := -std=gnu11 -O2 -fomit-frame-pointer -ffunction-sections -fdata-sections \
+          -DNETPLAY=NETPLAY_IPV4 \
           -mword-relocations $(ARCH) -w \
           -D__3DS__ -DARM11 -DNDEBUG -D_GNU_SOURCE \
           -DGFXMODULE_SDL -DSDL_DIR=SDL -DUSE_INTERNAL_MIKMOD -DHAVE_ZIP=1 \
@@ -41,6 +42,12 @@ LIBS    := -lSDL -lvorbisidec -logg -lpng -lz -lcitro3d -lctru -lm
 
 all: $(TARGET).3dsx
 
+# Rebuild everything when the compiler flags change (a -D like NETPLAY changes
+# struct layouts, which header dependencies alone would not catch).
+FLAGS_STAMP := $(OBJDIR)/.cflags
+$(shell mkdir -p $(OBJDIR); echo '$(CC) $(CFLAGS)' | cmp -s - $(FLAGS_STAMP) \
+	|| echo '$(CC) $(CFLAGS)' > $(FLAGS_STAMP))
+
 $(TARGET).elf: $(OBJS)
 	$(CC) $(LDFLAGS) $(OBJS) $(LIBS) -o $@
 
@@ -51,7 +58,7 @@ $(TARGET).smdh: res/icon.png
 $(TARGET).3dsx: $(TARGET).elf $(TARGET).smdh
 	3dsxtool $< $@ --smdh=$(TARGET).smdh
 
-$(OBJDIR)/%.o: %.c
+$(OBJDIR)/%.o: %.c $(FLAGS_STAMP)
 	@mkdir -p $(dir $@)
 	@echo "  CC  $<"
 	@$(CC) $(CFLAGS) -MMD -MP -c -o $@ $<

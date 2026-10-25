@@ -11,7 +11,7 @@ SRCS   := $(addprefix $(UQM)/src/,$(UQM_SOURCES)) $(PORT)/port3ds.c $(PORT)/thre
           $(PORT)/game3ds.c fake3ds.c
 OBJS   := $(patsubst %.c,$(OBJDIR)/%.o,$(subst ../,,$(SRCS)))
 
-CFLAGS := -O2 -g -w -D__3DS__ -DUQM3DS_HARNESS -DNDEBUG -DGFXMODULE_SDL -DSDL_DIR=SDL \
+CFLAGS := -O2 -g -w -D__3DS__ -DUQM3DS_HARNESS -DNETPLAY=NETPLAY_IPV4 -DNDEBUG -DGFXMODULE_SDL -DSDL_DIR=SDL \
           -DUSE_INTERNAL_MIKMOD -DHAVE_ZIP=1 -DTHREADLIB_SDL \
           -I. -I$(PORT) -I$(UQM)/src -I$(UQM)/src/regex $(shell sdl-config --cflags)
 LIBS   := $(shell sdl-config --libs) -lvorbisfile -lvorbis -logg -lpng -lz -lm -lpthread

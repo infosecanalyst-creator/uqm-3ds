@@ -31,7 +31,11 @@ you need are one tap away instead of behind menus:
 | Flying, ship menu | One-tap row under the map: DEVICES, CARGO, ROSTER, SAVE, LOAD (+ SCAN in orbit). Each opens that screen directly and B returns to flight. | Saving was B > cursor to Game > A > A (save) ; now 1 tap |
 | In a conversation | Every reply as a large, readable button; one tap says it. While the alien talks: SKIP and REPLAY | Up/Down x N + A, on 320x240 text |
 | Asked for a name | OPEN KEYBOARD (system keyboard) | Letter-by-letter picking |
-| In combat or menus | What each button does right now | - |
+| In any game menu (main menu, ship menu, orbit, planet scan, starbase, outfit, shipyard, game, settings, encounter) | The menu as large buttons with the current choice highlighted; one tap selects | Up/Down x N + A |
+| In Super Melee | Both fleets as a grid: tap a slot, pick a ship (with its cost); control type, Load, Save, Net, Battle!, Quit as buttons | Cursor around a 2x7 grid per fleet, then a 25-ship picker |
+| Choosing the next ship in a round | Your remaining ships as buttons, plus Random | Cursor + A |
+| Setting up netplay | Host (system keyboard), port, delay -/+, Connect / Wait / Cancel, and this 3DS's own IP to give your friend | Letter-by-letter entry |
+| In combat | What each button does right now | - |
 
 Always-present toolbar: II pause, ? help (5 pages), SWAP screens, DIM the
 bottom backlight (touch to wake), FPS. ZL swaps screens, ZR opens help.
@@ -72,16 +76,30 @@ Setup menu (music, speech, subtitles, melee zoom) works as on PC.
 | Path | What |
 |---|---|
 | `port3ds/` | the platform layer: screens, deck, input, keyboard, threads, config defaults |
-| `tools/patch_uqm.py` | 42 anchored, idempotent `#ifdef __3DS__` edits to UQM |
+| `tools/patch_uqm.py` | 73 anchored, idempotent `#ifdef __3DS__` edits to UQM |
 | `tools/repack_stored.py` | content pack repacker |
 | `Makefile.3ds` | cross build |
 | `harness/` | desktop test build: same code, fake libctru, scripted buttons, screenshots |
 
-## Not in this version
+## Stereo 3D
 
-Stereo 3D (the slider does nothing), netplay, and touch control inside the
-game itself (UQM has no pointer input). Ideas for 3D: ships and shots in
-front of a deeper starfield in combat; planets popping out in orbit view.
+The 3D slider works in HyperSpace, solar systems, planet orbit and ship
+combat. UQM draws a flat picture, so the port keeps a depth for every pixel:
+drawing is tagged in UQM's draw queue (the three starfield layers sit behind
+the screen at increasing depth, the solar system sits behind your ship, the
+orbiting planet floats in front), and each sprite stamps its tag only on the
+pixels it actually covers. Each eye is then composed with nearer pixels
+winning. Ships, shots, text and the status panel stay at screen depth, so
+nothing you read or aim at is doubled. Menus, conversations and the starmap
+stay flat, and with the slider at zero nothing extra is drawn.
+
+## Netplay
+
+Super Melee over Wi-Fi against another 3DS running this port (or UQM 0.8.0
+on a PC, same protocol). On the side your friend controls tap NET; one
+player taps WAIT FOR CONNECTION, the other types that 3DS's IP (the deck
+shows it) and taps CONNECT. Default port 21837. Each player sets their own
+side to HUMAN, then both tap BATTLE!.
 
 ## License
 

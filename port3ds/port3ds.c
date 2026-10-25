@@ -29,6 +29,11 @@
 #include <errno.h>
 #include <dirent.h>
 #include <math.h>
+#include <malloc.h>
+#ifndef UQM3DS_HARNESS
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#endif
 
 #include "libs/input/sdl/input.h"   /* ProcessInputEvent() */
 #include "font_big.h"
@@ -358,6 +363,8 @@ set_backlight (int off)
  */
 
 static void tap_key (int vk);
+static const char *net_local_ip (void);
+static void relayout (void);
 static void toggle_layout (void);
 static void open_keyboard (void);
 static void set_backlight (int off);
@@ -367,10 +374,11 @@ enum {
 	ACT_NONE, ACT_PAUSE, ACT_HELP, ACT_SWAP, ACT_DIM, ACT_STATS,
 	ACT_KEYBOARD, ACT_HELP_PREV, ACT_HELP_CLOSE, ACT_HELP_NEXT,
 	ACT_REPLY, ACT_REPLY_MORE, ACT_SKIP, ACT_REPLAY,
-	ACT_MAP, ACT_GO, ACT_ZOOM_IN, ACT_ZOOM_OUT, ACT_SHIP, ACT_SHORTCUT
+	ACT_MAP, ACT_GO, ACT_ZOOM_IN, ACT_ZOOM_OUT, ACT_SHIP, ACT_SHORTCUT,
+	ACT_MENU, ACT_PICK, ACT_NET, ACT_MELEE_OPT, ACT_MELEE_SLOT, ACT_MELEE_SHIP, ACT_MELEE_CANCEL
 };
 typedef struct { short x, y, w, h; short act, arg; } Region;
-static Region regions[48];
+static Region regions[64];
 static int nregions = 0;
 static int touch_act = ACT_NONE, touch_arg = 0;   /* armed on press */
 static int touch_live = 0;                          /* finger still on it */
@@ -777,7 +785,7 @@ static const Legend legend_talk[] = {
 	{"B", "Skip speech"}, {"RIGHT", "Fast-forward"}, {"LEFT", "Replay line"},
 	{"START", "Pause"}, {NULL, NULL} };
 static const Legend legend_starbase[] = {
-	{"PAD", "Move"}, {"A", "Select"}, {"B", "Back"}, {"X", "Special"},
+	{"PAD", "Move"}, {"A", "Select"}, {"B", "Back"}, {"UP/DOWN", "Buy / sell"},
 	{"START", "Pause"}, {NULL, NULL} };
 static const Legend legend_text[] = {
 	{"UP/DOWN", "Pick letter"}, {"LEFT/RIGHT", "Move"},
@@ -800,7 +808,20 @@ draw_legend_list (int ox, const Legend *lg, int y0)
 }
 
 /* ---- the deck ---- */
-enum { MODE_LEGEND, MODE_NAV, MODE_REPLIES, MODE_TALK, MODE_TEXT, MODE_HELP };
+enum { MODE_LEGEND, MODE_NAV, MODE_REPLIES, MODE_TALK, MODE_TEXT, MODE_HELP,
+	MODE_MENU, MODE_MELEE, MODE_PICK, MODE_NET };
+static Port3DSNetDlg netdlg;
+static int netdlg_on = 0;
+static unsigned char pick_ships[2][14];
+static int pick_on[2] = { 0, 0 };
+
+/* the game's own menus, refreshed by pump_input */
+static Port3DSMenuItem menu_items[P3_MENU_MAX];
+static int menu_n = 0, menu_base = -1, menu_cur = 0;
+/* Super Melee */
+static Port3DSMelee melee;
+static int melee_on = 0;
+static int melee_pick_side = -1, melee_pick_slot = -1;
 
 static int
 deck_mode (void)
@@ -809,6 +830,14 @@ deck_mode (void)
 		return MODE_HELP;
 	if (char_mode)
 		return MODE_TEXT;
+	if (netdlg_on)
+		return MODE_NET;
+	if (pick_on[0] || pick_on[1])
+		return MODE_PICK;
+	if (melee_on)
+		return MODE_MELEE;
+	if (menu_n > 0)
+		return MODE_MENU;
 	if (deck_ctx == CTX3DS_ENCOUNTER)
 		return comm_fresh () ? MODE_REPLIES : MODE_TALK;
 	if (deck_ctx == CTX3DS_HYPERSPACE || deck_ctx == CTX3DS_SOLARSYS)
@@ -825,6 +854,24 @@ mode_title (int mode)
 		case MODE_TEXT: return "ENTER A NAME";
 		case MODE_REPLIES: return "YOUR REPLY";
 		case MODE_TALK: return "ENCOUNTER";
+		case MODE_MELEE: return "SUPER MELEE";
+		case MODE_PICK: return "PICK SHIP";
+		case MODE_NET: return "NETWORK MELEE";
+		case MODE_MENU:
+			switch (menu_base)
+			{
+				case P3M_MAIN: return "MAIN MENU";
+				case P3M_STARBASE: return "STARBASE";
+				case PM3_SCAN: return "IN ORBIT";
+				case PM3_STARMAP: return "SHIP MENU";
+				case PM3_MIN_SCAN: return "PLANET SCAN";
+				case PM3_SAVE_GAME: return "GAME";
+				case PM3_CONVERSE: return "ENCOUNTER";
+				case PM3_FUEL: return "OUTFIT STARSHIP";
+				case PM3_CREW: return "SHIPYARD";
+				case PM3_SOUND_ON: return "SETTINGS";
+				default: return "MENU";
+			}
 		case MODE_NAV:
 			return deck_ctx == CTX3DS_HYPERSPACE ? "HYPERSPACE" : "SOLAR SYSTEM";
 		default:
@@ -900,6 +947,176 @@ draw_replies (int ox)
 }
 
 static void
+draw_menu (int ox)
+{
+	int i, y = 27, h, gap = 4;
+	if (deck_ctx == CTX3DS_HYPERSPACE || deck_ctx == CTX3DS_SOLARSYS)
+	{	/* keep the ship's numbers in view while its menus are open */
+		char buf[96], f[16];
+		port3ds_game_read (&ship);
+		fmt_fuel (f, sizeof f, ship.fuel);
+		snprintf (buf, sizeof buf, "FUEL %s  RU %u  CREW %d  LANDERS %d",
+				f, ship.ru, ship.crew, ship.landers);
+		text (ox + 4, 26, buf, COL_TEXT, 0);
+		y = 42;
+	}
+	h = (238 - y) / (menu_n > 0 ? menu_n : 1) - gap;
+	if (h > 40)
+		h = 40;
+	if (h < 18)
+		gap = 2, h = (238 - y) / menu_n - gap;
+	for (i = 0; i < menu_n; ++i, y += h + gap)
+		button (ox + 6, y, 308, h, menu_items[i].label, ACT_MENU, i,
+				menu_items[i].state == menu_cur, 0, h >= 18);
+}
+
+static const char *const control_name[5] = {
+	"HUMAN", "WEAK CPU", "GOOD CPU", "AWESOME CPU", "NETWORK" };
+
+static void
+draw_melee_team (int ox, int team, int y)
+{
+	char buf[64];
+	int r, c;
+	snprintf (buf, sizeof buf, "%s  %s", team == 0 ? "TOP" : "BOTTOM",
+			melee.name[team]);
+	text (ox + 4, y, buf, COL_ACCENT, 0);
+	snprintf (buf, sizeof buf, "%d PTS", melee.value[team]);
+	text (ox + 316 - text_w (buf, 0), y, buf, COL_DIM, 0);
+	for (r = 0; r < 2; ++r)
+		for (c = 0; c < 7; ++c)
+		{
+			const int slot = r * 7 + c;
+			const int sh = melee.ships[team][slot];
+			const int sel = melee_pick_side == team && melee_pick_slot == slot;
+			button (ox + 3 + c * 45, y + 12 + r * 23, 43, 21,
+					sh == 255 ? "-" : port3ds_ship_short (sh),
+					ACT_MELEE_SLOT, team * 16 + slot, sel, 0, 0);
+		}
+}
+
+static void
+draw_melee_buttons (int ox, int top, int y)
+{
+	/* the TOP controls button drives PlayerControl[1] (as on screen) */
+	const int ctl = melee.control[top ? 1 : 0];
+	char buf[40];
+	int x = ox + 3, w = melee.net ? 110 : 150;
+	snprintf (buf, sizeof buf, "%s", control_name[ctl < 5 ? ctl : 0]);
+	button (x, y, w, 22, buf, ACT_MELEE_OPT, top ? P3MO_CTRL_TOP : P3MO_CTRL_BOT, 0, 0, 0);
+	x += w + 3;
+	if (melee.net)
+	{
+		button (x, y, 48, 22, "NET", ACT_MELEE_OPT, top ? P3MO_NET_TOP : P3MO_NET_BOT, 0, 0, 0);
+		x += 51;
+	}
+	w = (ox + 317 - x - 3) / 2;
+	button (x, y, w, 22, "LOAD", ACT_MELEE_OPT, top ? P3MO_LOAD_TOP : P3MO_LOAD_BOT, 0, 0, 0);
+	button (x + w + 3, y, w, 22, "SAVE", ACT_MELEE_OPT, top ? P3MO_SAVE_TOP : P3MO_SAVE_BOT, 0, 0, 0);
+}
+
+static void
+draw_net (int ox)
+{
+	char buf[96];
+	snprintf (buf, sizeof buf, "%s player.  This 3DS: %s",
+			netdlg.side ? "Top" : "Bottom", net_local_ip ());
+	text (ox + 4, 26, buf, COL_ACCENT, 0);
+	snprintf (buf, sizeof buf, "HOST  %s", netdlg.host[0] ? netdlg.host : "(tap to type)");
+	button (ox + 3, 42, 314, 28, buf, ACT_NET, P3ND_HOST, 0, 0, 1);
+	snprintf (buf, sizeof buf, "PORT  %s", netdlg.port);
+	button (ox + 3, 74, 200, 28, buf, ACT_NET, P3ND_PORT, 0, 0, 1);
+	snprintf (buf, sizeof buf, "DELAY %d", netdlg.delay);
+	text (ox + 210, 82, buf, COL_TEXT, 0);
+	button (ox + 262, 74, 26, 28, "-", ACT_NET, P3ND_DELAY_DOWN, 0, netdlg.delay <= 0, 1);
+	button (ox + 291, 74, 26, 28, "+", ACT_NET, P3ND_DELAY_UP, 0, netdlg.delay >= 9, 1);
+	button (ox + 3, 110, 314, 34, "CONNECT TO HOST", ACT_NET, P3ND_CONNECT, 1, !netdlg.host[0], 1);
+	button (ox + 3, 150, 314, 34, "WAIT FOR CONNECTION", ACT_NET, P3ND_LISTEN, 0, 0, 1);
+	button (ox + 3, 190, 314, 26, "CANCEL", ACT_NET, P3ND_CANCEL, 0, 0, 1);
+	text_center (0, 224, deck_w, "One 3DS waits; the other connects to its IP", COL_DIM, 0);
+}
+
+static void
+net_keyboard (int which)
+{
+	SwkbdState kb;
+	char out[64];
+	SwkbdButton b;
+	const int port = which == P3ND_PORT;
+	swkbdInit (&kb, port ? SWKBD_TYPE_NUMPAD : SWKBD_TYPE_NORMAL, 2, port ? 5 : 48);
+	swkbdSetInitialText (&kb, port ? netdlg.port : netdlg.host);
+	swkbdSetHintText (&kb, port ? "Port (21837)" : "Host IP, e.g. 192.168.1.50");
+	swkbdSetValidation (&kb, SWKBD_NOTEMPTY_NOTBLANK, 0, 0);
+	memset (out, 0, sizeof out);
+	b = swkbdInputText (&kb, out, sizeof out);
+	if (b == SWKBD_BUTTON_CONFIRM && out[0])
+		port3ds_netdlg_act (which, out);
+	relayout ();
+}
+
+static void
+draw_pick (int ox)
+{
+	int pl, y = 26, both = pick_on[0] && pick_on[1];
+	for (pl = 1; pl >= 0; --pl)
+	{
+		int r, c;
+		if (!pick_on[pl])
+			continue;
+		text (ox + 4, y, pl == 1 ? "TOP PLAYER" : "BOTTOM PLAYER", COL_ACCENT, 0);
+		for (r = 0; r < 2; ++r)
+			for (c = 0; c < 7; ++c)
+			{
+				const int slot = r * 7 + c, sh = pick_ships[pl][slot];
+				button (ox + 3 + c * 45, y + 14 + r * (both ? 25 : 40), 43, both ? 23 : 37,
+						sh == 255 ? "" : port3ds_ship_short (sh), ACT_PICK, pl * 16 + slot,
+						0, sh == 255, 0);
+			}
+		button (ox + 3, y + (both ? 66 : 100), 314, both ? 26 : 40, "RANDOM SHIP",
+				ACT_PICK, pl * 16 + 15, 1, 0, 1);
+		y += both ? 106 : 160;
+	}
+}
+
+static void
+draw_melee (int ox)
+{
+	if (melee_pick_side >= 0)
+	{	/* ship picker for one slot */
+		char buf[48];
+		int i;
+		snprintf (buf, sizeof buf, "%s FLEET, SLOT %d: PICK A SHIP",
+				melee_pick_side == 0 ? "TOP" : "BOTTOM", melee_pick_slot + 1);
+		text (ox + 4, 26, buf, COL_ACCENT, 0);
+		for (i = 0; i < 25; ++i)
+		{
+			snprintf (buf, sizeof buf, "%s %d", port3ds_ship_short (i),
+					port3ds_ship_cost (i));
+			button (ox + 3 + (i % 5) * 63, 41 + (i / 5) * 32, 60, 29, buf,
+					ACT_MELEE_SHIP, i, melee.ships[melee_pick_side][melee_pick_slot] == i,
+					0, 0);
+		}
+		button (ox + 3, 203, 153, 32, "EMPTY SLOT", ACT_MELEE_SHIP, 255, 0, 0, 1);
+		button (ox + 162, 203, 153, 32, "CANCEL", ACT_MELEE_CANCEL, 0, 0, 0, 1);
+		return;
+	}
+	draw_melee_team (ox, 0, 25);
+	draw_melee_buttons (ox, 1, 84);
+	button (ox + 3, 110, 210, 30, "BATTLE!", ACT_MELEE_OPT, P3MO_BATTLE, 1, 0, 1);
+	button (ox + 217, 110, 100, 30, "QUIT", ACT_MELEE_OPT, P3MO_QUIT, 0, 0, 1);
+	draw_melee_team (ox, 1, 145);
+	draw_melee_buttons (ox, 0, 204);
+	if (melee.net)
+	{
+		char buf[64];
+		snprintf (buf, sizeof buf, "Tap a slot to change it.  This 3DS: %s", net_local_ip ());
+		text_center (0, 228, deck_w, buf, COL_DIM, 0);
+	}
+	else
+		text_center (0, 228, deck_w, "Tap a slot to change its ship", COL_DIM, 0);
+}
+
+static void
 draw_help (int ox)
 {
 	const HelpPage3DS *pg = &help_pages[help_page];
@@ -944,6 +1161,18 @@ draw_deck (void)
 		case MODE_REPLIES:
 			draw_replies (ox);
 			break;
+		case MODE_MENU:
+			draw_menu (ox);
+			break;
+		case MODE_MELEE:
+			draw_melee (ox);
+			break;
+		case MODE_PICK:
+			draw_pick (ox);
+			break;
+		case MODE_NET:
+			draw_net (ox);
+			break;
 		case MODE_TALK:
 			draw_legend_list (ox, legend_talk, 32);
 			button (ox + 6, 150, 150, 50, "SKIP  >>", ACT_SKIP, 0, 0, 0, 1);
@@ -985,6 +1214,204 @@ show_deck (void)
 /* video                                                                */
 /* ------------------------------------------------------------------ */
 
+/* ---- stereo 3D -----------------------------------------------------------
+ * The game draws one flat 320x240 picture. Alongside it the port keeps a
+ * depth per pixel: drawing commands are tagged in the queue (starfield
+ * layers in HyperSpace and combat, the solar system behind the ships, the
+ * orbiting planet in front of the screen), and every primitive that lands on
+ * the main screen stamps the current tag into the pixels it actually covers
+ * (transparent sprite pixels are skipped). Presenting with the 3D slider up
+ * shifts each pixel by its depth for each eye, nearer pixels winning. */
+
+static signed char depth_buf[240][320];
+static volatile int cur_depth = 0;
+static SDL_Surface *main_screen = NULL;
+static volatile u64 depth_last_used = 0;
+static int stereo_on = 0;
+static float stereo_slider = 0.0f;
+int port3ds_stereo_ok = 1;
+
+void
+port3ds_set_main_screen (SDL_Surface *m)
+{
+	main_screen = m;
+	memset (depth_buf, 0, sizeof depth_buf);
+}
+
+void
+port3ds_depth_now (int depth)
+{
+	cur_depth = depth < -16 ? -16 : depth > 15 ? 15 : depth;
+	if (depth)
+		depth_last_used = osGetTime ();
+}
+
+static int
+clip_box (SDL_Surface *dst, int *x, int *y, int *w, int *h, int *ox, int *oy)
+{
+	int x0 = dst->clip_rect.x, y0 = dst->clip_rect.y;
+	int x1 = x0 + dst->clip_rect.w, y1 = y0 + dst->clip_rect.h;
+	if (x1 > 320) x1 = 320;
+	if (y1 > 240) y1 = 240;
+	if (x0 < 0) x0 = 0;
+	if (y0 < 0) y0 = 0;
+	*ox = *oy = 0;
+	if (*x < x0) { *ox = x0 - *x; *w -= *ox; *x = x0; }
+	if (*y < y0) { *oy = y0 - *y; *h -= *oy; *y = y0; }
+	if (*x + *w > x1) *w = x1 - *x;
+	if (*y + *h > y1) *h = y1 - *y;
+	return *w > 0 && *h > 0;
+}
+
+void
+port3ds_depth_mark_rect (SDL_Surface *dst, int x, int y, int w, int h)
+{
+	int ox, oy, r;
+	if (dst != main_screen || !clip_box (dst, &x, &y, &w, &h, &ox, &oy))
+		return;
+	for (r = 0; r < h; ++r)
+		memset (&depth_buf[y + r][x], cur_depth, (size_t) w);
+}
+
+void
+port3ds_depth_mark_line (SDL_Surface *dst, int x1, int y1, int x2, int y2)
+{
+	int dx, dy, n, i;
+	const SDL_Rect *c;
+	if (dst != main_screen)
+		return;
+	c = &dst->clip_rect;
+	dx = x2 - x1;
+	dy = y2 - y1;
+	n = abs (dx) > abs (dy) ? abs (dx) : abs (dy);
+	for (i = 0; i <= n; ++i)
+	{
+		const int x = n ? x1 + (dx * i + (dx > 0 ? n / 2 : -n / 2)) / n : x1;
+		const int y = n ? y1 + (dy * i + (dy > 0 ? n / 2 : -n / 2)) / n : y1;
+		if (x >= c->x && y >= c->y && x < c->x + c->w && y < c->y + c->h
+				&& x >= 0 && y >= 0 && x < 320 && y < 240)
+			depth_buf[y][x] = (signed char) cur_depth;
+	}
+}
+
+void
+port3ds_depth_mark_blit (SDL_Surface *src, const SDL_Rect *sr,
+		SDL_Surface *dst, const SDL_Rect *dr)
+{
+	int sx = sr ? sr->x : 0, sy = sr ? sr->y : 0;
+	int w = sr ? sr->w : src->w, h = sr ? sr->h : src->h;
+	int x = dr ? dr->x : 0, y = dr ? dr->y : 0;
+	int ox, oy, r, c;
+	const int ck = (src->flags & SDL_SRCCOLORKEY) != 0;
+	const Uint32 amask = (src->flags & SDL_SRCALPHA) ? src->format->Amask : 0;
+	const Uint32 key = src->format->colorkey;
+	const int bpp = src->format->BytesPerPixel;
+
+	if (dst != main_screen)
+		return;
+	if (sx < 0) { x -= sx; w += sx; sx = 0; }
+	if (sy < 0) { y -= sy; h += sy; sy = 0; }
+	if (sx + w > src->w) w = src->w - sx;
+	if (sy + h > src->h) h = src->h - sy;
+	if (!clip_box (dst, &x, &y, &w, &h, &ox, &oy))
+		return;
+	sx += ox;
+	sy += oy;
+	if ((!ck && !amask) || !src->pixels)
+	{	/* opaque (or pixels not reachable): the whole box */
+		for (r = 0; r < h; ++r)
+			memset (&depth_buf[y + r][x], cur_depth, (size_t) w);
+		return;
+	}
+	for (r = 0; r < h; ++r)
+	{
+		const Uint8 *row = (const Uint8 *) src->pixels + (sy + r) * src->pitch + sx * bpp;
+		signed char *d = &depth_buf[y + r][x];
+		for (c = 0; c < w; ++c)
+		{
+			Uint32 p;
+			switch (bpp)
+			{
+				case 1: p = row[c]; break;
+				case 2: p = ((const Uint16 *) row)[c]; break;
+				case 4: p = ((const Uint32 *) row)[c]; break;
+				default: p = row[c * 3] | (row[c * 3 + 1] << 8) | (row[c * 3 + 2] << 16); break;
+			}
+			if ((ck && p == key) || (amask && !(p & amask)))
+				continue;
+			d[c] = (signed char) cur_depth;
+		}
+	}
+}
+
+static int
+stereo_wanted (void)
+{
+	return game_screen () == GFX_TOP && stereo_slider > 0.02f && port3ds_stereo_ok
+			&& (deck_ctx == CTX3DS_COMBAT || deck_ctx == CTX3DS_HYPERSPACE
+				|| deck_ctx == CTX3DS_SOLARSYS)
+			&& osGetTime () - depth_last_used < 1500;
+}
+
+static void
+present_stereo (const SDL_Surface *frame)
+{
+	static signed char zb[400 * 240];
+	const u32 *pix = (const u32 *) frame->pixels;
+	const int pitch = frame->pitch / 4;
+	int eye;
+	for (eye = 0; eye < 2; ++eye)
+	{
+		u16 fw, fh;
+		u32 *fb = (u32 *) gfxGetFramebuffer (GFX_TOP, eye ? GFX_RIGHT : GFX_LEFT, &fw, &fh);
+		int off[32], d, x, y;
+		for (d = -16; d < 16; ++d)
+		{	/* depth 1 = 1 px of disparity at full slider, split over the eyes */
+			const float disp = d * stereo_slider * 1.25f;
+			const int half = (int) (disp >= 0 ? disp / 2 + 0.5f : disp / 2 - 0.5f);
+			off[d + 16] = eye ? half : -half;
+		}
+		memset (fb, 0, 400 * 240 * sizeof (u32));
+		memset (zb, 127, sizeof zb);
+		for (y = 0; y < 240; ++y)
+		{
+			const u32 *s = pix + y * pitch;
+			const signed char *dr = depth_buf[y];
+			const int fy = 239 - y;
+			for (x = 0; x < 320; ++x)
+			{
+				const int dd = dr[x];
+				const int X = 40 + x + off[dd + 16];
+				int idx;
+				/* black is empty space: never let it hide what lies behind */
+				if (!(s[x] & 0xFFFFFF00u) || (unsigned) X >= 400u)
+					continue;
+				idx = X * 240 + fy;
+				if (dd < zb[idx])
+				{
+					zb[idx] = (signed char) dd;
+					fb[idx] = s[x];
+				}
+			}
+		}
+		GSPGPU_FlushDataCache (fb, 400 * 240 * 4);
+	}
+}
+
+/* the slider moved: re-present the last frame even if the game is idle */
+static void
+stereo_follow_slider (void)
+{
+	const float sl = osGet3DSliderState ();
+	if (sl - stereo_slider > 0.03f || stereo_slider - sl > 0.03f
+			|| (sl == 0.0f) != (stereo_slider == 0.0f))
+	{
+		stereo_slider = sl;
+		if (video_surface && (stereo_on || stereo_wanted ()))
+			port3ds_present (video_surface);
+	}
+}
+
 SDL_Surface *
 port3ds_create_video_surface (void)
 {
@@ -1020,6 +1447,20 @@ port3ds_present (SDL_Surface *frame)
 		last_present = svcGetSystemTick ();
 	}
 	t0 = svcGetSystemTick ();
+	{
+		const int want = stereo_wanted ();
+		if (want != stereo_on)
+		{
+			stereo_on = want;
+			gfxSet3D (want ? true : false);
+		}
+	}
+	if (stereo_on)
+	{
+		present_stereo (frame);
+		gfxScreenSwapBuffers (GFX_TOP, true);
+		goto stats;
+	}
 	fb = (u32 *) gfxGetFramebuffer (scr, GFX_LEFT, &fw, &fh);
 	if (scr == GFX_TOP)
 	{	/* pillar-box: the 40-pixel bands either side stay black */
@@ -1030,6 +1471,7 @@ port3ds_present (SDL_Surface *frame)
 	GSPGPU_FlushDataCache (fb, (u32) (scr == GFX_TOP ? 400 : 320) * 240 * 4);
 	gfxScreenSwapBuffers (scr, false);
 
+stats:
 	/* stats: presents per second and the cost of this function */
 	++stat_frames;
 	stat_ticks += svcGetSystemTick () - t0;
@@ -1245,6 +1687,32 @@ do_action (int act, int arg, int px, int py)
 		case ACT_ZOOM_OUT: if (map_zoom > 0) --map_zoom; break;
 		case ACT_SHIP: map_follow = 1; break;
 		case ACT_SHORTCUT: port3ds_request_shortcut (arg); break;
+		case ACT_MENU:
+			if (arg >= 0 && arg < menu_n)
+				port3ds_menu_pick (menu_base, menu_items[arg].state);
+			break;
+		case ACT_NET:
+			if (arg == P3ND_HOST || arg == P3ND_PORT)
+			{
+				net_keyboard (arg);
+				return;
+			}
+			port3ds_netdlg_act (arg, NULL);
+			break;
+		case ACT_PICK:
+			port3ds_pick (arg / 16, arg % 16 == 15 ? P3_PICK_RANDOM : arg % 16);
+			break;
+		case ACT_MELEE_OPT: port3ds_melee_option (arg); break;
+		case ACT_MELEE_SLOT:
+			melee_pick_side = arg / 16;
+			melee_pick_slot = arg % 16;
+			break;
+		case ACT_MELEE_SHIP:
+			if (melee_pick_side >= 0)
+				port3ds_melee_ship (melee_pick_side, melee_pick_slot, arg);
+			melee_pick_side = melee_pick_slot = -1;
+			break;
+		case ACT_MELEE_CANCEL: melee_pick_side = melee_pick_slot = -1; break;
 	}
 	deck_dirty = 1;
 }
@@ -1393,6 +1861,82 @@ port3ds_pump_input (void)
 			deck_dirty = 1;
 		}
 	}
+	{	/* the game's menus: redraw when one opens, closes or moves */
+		static u32 last_sig = 0;
+		int b = -1, c = 0, n;
+		u32 sig;
+		n = port3ds_menu_items (&b, &c, menu_items, P3_MENU_MAX);
+		menu_n = n;
+		menu_base = b;
+		menu_cur = c;
+		sig = n ? ((u32) n << 24) ^ ((u32) b << 8) ^ (u32) c ^ 0x80000000u : 0;
+		if (n)
+		{
+			int i;
+			for (i = 0; i < n; ++i)
+				sig = sig * 31 + (u32) menu_items[i].label[0] + (u32) menu_items[i].state;
+		}
+		if (sig != last_sig)
+		{
+			last_sig = sig;
+			deck_dirty = 1;
+		}
+	}
+	{	/* Super Melee setup */
+		static u32 last_sig = 0;
+		u32 sig = 0;
+		melee_on = port3ds_melee_read (&melee);
+		if (melee_on)
+		{
+			const unsigned char *p = (const unsigned char *) &melee;
+			size_t i;
+			sig = 1;
+			for (i = 0; i < sizeof melee; ++i)
+				sig = sig * 131 + p[i];
+		}
+		else
+			melee_pick_side = melee_pick_slot = -1;
+		if (sig != last_sig)
+		{
+			last_sig = sig;
+			deck_dirty = 1;
+		}
+	}
+	{	/* network dialog */
+		static u32 last_sig = 0;
+		u32 sig = 0;
+		netdlg_on = port3ds_netdlg_read (&netdlg);
+		if (netdlg_on)
+		{
+			const char *p;
+			sig = 5 + (u32) netdlg.delay * 7 + (u32) netdlg.side;
+			for (p = netdlg.host; *p; ++p) sig = sig * 31 + (u32) *p;
+			for (p = netdlg.port; *p; ++p) sig = sig * 31 + (u32) *p;
+		}
+		if (sig != last_sig)
+		{
+			last_sig = sig;
+			deck_dirty = 1;
+		}
+	}
+	{	/* choosing ships in a melee round */
+		static u32 last_sig = 0;
+		u32 sig = 0;
+		int pl, i;
+		for (pl = 0; pl < 2; ++pl)
+		{
+			pick_on[pl] = port3ds_pick_read (pl, pick_ships[pl]);
+			if (pick_on[pl])
+				for (sig += 7 + pl, i = 0; i < 14; ++i)
+					sig = sig * 33 + pick_ships[pl][i];
+		}
+		if (sig != last_sig)
+		{
+			last_sig = sig;
+			deck_dirty = 1;
+		}
+	}
+	stereo_follow_slider ();
 	if (deck_mode () == MODE_NAV && osGetTime () - last_nav_draw >= 250)
 		deck_dirty = 1;       /* the ship moves: refresh map and fuel 4x/s */
 	if (deck_dirty)
@@ -1528,6 +2072,40 @@ write_defaults (void)
 	}
 }
 
+/* sockets for Super Melee netplay (1 MB, page-aligned, owned by soc:u) */
+static u32 *soc_buf = NULL;
+static char local_ip[32] = "";
+
+static void
+net_init (void)
+{
+#ifndef UQM3DS_HARNESS
+	soc_buf = (u32 *) memalign (0x1000, 0x100000);
+	if (soc_buf && R_FAILED (socInit (soc_buf, 0x100000)))
+	{
+		free (soc_buf);
+		soc_buf = NULL;
+	}
+#endif
+}
+
+static const char *
+net_local_ip (void)
+{
+#ifndef UQM3DS_HARNESS
+	if (soc_buf)
+	{
+		struct in_addr a;
+		a.s_addr = (in_addr_t) gethostid ();
+		if (a.s_addr && a.s_addr != INADDR_NONE)
+			inet_ntop (AF_INET, &a, local_ip, sizeof local_ip);
+	}
+#else
+	strcpy (local_ip, "127.0.0.1");
+#endif
+	return local_ip[0] ? local_ip : "no Wi-Fi";
+}
+
 void
 port3ds_init (void)
 {
@@ -1553,6 +2131,7 @@ port3ds_init (void)
 	load_port_settings ();
 
 	comm_lock = SDL_CreateMutex ();
+	net_init ();
 	stat_second_start = osGetTime ();
 	relayout ();
 }
@@ -1563,5 +2142,13 @@ port3ds_exit (void)
 	set_backlight (0);
 	if (lcd_ok)
 		gspLcdExit ();
+#ifndef UQM3DS_HARNESS
+	if (soc_buf)
+	{
+		socExit ();
+		free (soc_buf);
+		soc_buf = NULL;
+	}
+#endif
 	gfxExit ();
 }
