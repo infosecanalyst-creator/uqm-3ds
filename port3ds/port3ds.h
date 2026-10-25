@@ -74,6 +74,7 @@ typedef struct {
 	int have_dest, dest_x, dest_y;
 	int star;                    /* system we are in, or -1 */
 	int quasispace;
+	int in_orbit;        /* orbiting a planet (ship menu has SCAN) */
 } Port3DSShip;
 void port3ds_game_read (Port3DSShip *s);
 int port3ds_star_count (void);
@@ -82,6 +83,16 @@ void port3ds_star_name (int i, char *buf, int size);
 int port3ds_fuel_needed (int x0, int y0, int x1, int y1);
 /* main thread queues, game thread (DoInput) applies */
 void port3ds_request_course (int ux, int uy);
+
+/* Ship-menu shortcuts: values are the ship menu's own item numbers (menustat.h),
+ * SAVE/LOAD go one level deeper into the Game menu. A request opens the menu,
+ * runs the item and returns to flight; it expires after 2 s if nothing takes it. */
+enum { P3SC_SCAN = 0, P3SC_DEVICES = 2, P3SC_CARGO = 3, P3SC_ROSTER = 4,
+	P3SC_GAME = 5, P3SC_SAVE = 100, P3SC_LOAD = 101 };
+void port3ds_request_shortcut (int sc);
+int port3ds_shortcut_pending (int in_orbit);   /* game thread: open the menu? */
+int port3ds_take_shortcut (int in_orbit);      /* game thread: item, or -1 */
+int port3ds_take_gameopt (void);               /* game thread: 0 save, 1 load, -1 */
 void port3ds_game_frame (void);
 
 /* comm.c PlayerResponseInput(), game thread, once per frame while the

@@ -28,6 +28,7 @@ you need are one tap away instead of behind menus:
 | You are... | Bottom screen | Saves |
 |---|---|---|
 | Flying (HyperSpace, solar system) | Fuel / RU / crew / landers strip, touch galaxy map with your fuel range ring. Tap a star: name, distance, fuel needed (red if out of reach). Tap again or SET COURSE: the autopilot flies there. Drag to pan, +/- zoom. | Plotting a course was B > Starmap > 10-40 cursor presses > A > B; now 2 taps |
+| Flying, ship menu | One-tap row under the map: DEVICES, CARGO, ROSTER, SAVE, LOAD (+ SCAN in orbit). Each opens that screen directly and B returns to flight. | Saving was B > cursor to Game > A > A (save) ; now 1 tap |
 | In a conversation | Every reply as a large, readable button; one tap says it. While the alien talks: SKIP and REPLAY | Up/Down x N + A, on 320x240 text |
 | Asked for a name | OPEN KEYBOARD (system keyboard) | Letter-by-letter picking |
 | In combat or menus | What each button does right now | - |
@@ -71,7 +72,7 @@ Setup menu (music, speech, subtitles, melee zoom) works as on PC.
 | Path | What |
 |---|---|
 | `port3ds/` | the platform layer: screens, deck, input, keyboard, threads, config defaults |
-| `tools/patch_uqm.py` | 28 anchored, idempotent `#ifdef __3DS__` edits to UQM |
+| `tools/patch_uqm.py` | 42 anchored, idempotent `#ifdef __3DS__` edits to UQM |
 | `tools/repack_stored.py` | content pack repacker |
 | `Makefile.3ds` | cross build |
 | `harness/` | desktop test build: same code, fake libctru, scripted buttons, screenshots |

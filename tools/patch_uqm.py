@@ -183,4 +183,54 @@ rw("uqm/comm.c",
    "#include \"libs/log.h\"\n#ifdef __3DS__\n#\tinclude \"port3ds.h\"\n#endif\n",
    '#\tinclude "port3ds.h"')
 
+# ---- ship-menu shortcuts: one deck tap opens Devices / Cargo / Roster / Save / Load
+# (and Scan in orbit) directly, then drops back to flight -------------------------
+INC = '#ifdef __3DS__\n#\tinclude "port3ds.h"\n#endif\n'
+for rel, anchor in (("uqm/hyper.c", '#include "libs/mathlib.h"\n'),
+                    ("uqm/planets/solarsys.c", '#include "libs/mathlib.h"\n'),
+                    ("uqm/planets/planets.c", '#include "options.h"\n'),
+                    ("uqm/gameopt.c", '#include "util.h"\n'),
+                    ("uqm/ships/sis_ship/sis_ship.c", '#include "libs/mathlib.h"\n')):
+    rw(rel, anchor, anchor + INC, '#\tinclude "port3ds.h"')
+
+# flight: a pending shortcut opens the ship menu like B does
+rw("uqm/ships/sis_ship/sis_ship.c",
+   "\t\t\tPulsedInputState.menu[KEY_MENU_CANCEL])\n",
+   "\t\t\tPulsedInputState.menu[KEY_MENU_CANCEL]\n#ifdef __3DS__\n\t\t\t|| port3ds_shortcut_pending (0)\n#endif\n\t\t\t)\n",
+   "port3ds_shortcut_pending (0)")
+rw("uqm/planets/solarsys.c",
+   "\tBOOLEAN cancel = PulsedInputState.menu[KEY_MENU_CANCEL];\n",
+   "\tBOOLEAN cancel = PulsedInputState.menu[KEY_MENU_CANCEL];\n#ifdef __3DS__\n\tif (!pSS->InOrbit && port3ds_shortcut_pending (0))\n\t\tcancel = TRUE;\n#endif\n",
+   "port3ds_shortcut_pending (0)")
+
+# the menus: jump to the item and select it
+JUMP = ("#ifdef __3DS__\n\tconst int p3sc = port3ds_take_shortcut (%d);\n\tif (p3sc %s)\n\t{\n"
+        "\t\tpMS->CurState = (BYTE) p3sc;\n\t\tDrawMenuStateStrings (%s, pMS->CurState);\n"
+        "\t\tselect = TRUE;\n\t\thandled = FALSE;\n\t}\n\telse\n#endif\n")
+for rel, base, orbit in (("uqm/hyper.c", "PM_STARMAP", 0),
+                         ("uqm/planets/solarsys.c", "PM_STARMAP", 0),
+                         ("uqm/planets/planets.c", "PM_SCAN", 1)):
+    call = "\thandled = DoMenuChooser (pMS, %s);\n" % base
+    rw(rel, call, (JUMP % (orbit, ">= 0" if orbit else "> 0", base)) + call,
+       "port3ds_take_shortcut (")
+    tail = "\n\tif (!(GLOBAL (CurrentActivity) & CHECK_ABORT))\n\t{\n\t\tif (select)\n"
+    if orbit:   # stay in orbit, item still highlighted
+        back = ("\n#ifdef __3DS__\n\tif (p3sc >= 0 && !(GLOBAL (CurrentActivity) & CHECK_ABORT))\n\t{\n"
+                "\t\tDrawMenuStateStrings (PM_SCAN, pMS->CurState);\n\t\tSetFlashRect (SFR_MENU_3DO);\n"
+                "\t\treturn TRUE;\n\t}\n#endif\n")
+    else:       # back to flight
+        back = "\n#ifdef __3DS__\n\tif (p3sc > 0)\n\t\treturn FALSE;\n#endif\n"
+    rw(rel, tail, back + tail, "p3sc >= 0 && !(" if orbit else "if (p3sc > 0)\n\t\treturn FALSE;")
+
+# Game menu: straight into the Save / Load picker
+rw("uqm/gameopt.c",
+   "DoGameOptions (MENU_STATE *pMS)\n{\n\tif (GLOBAL (CurrentActivity) & CHECK_ABORT)\n\t\treturn FALSE;\n",
+   "DoGameOptions (MENU_STATE *pMS)\n{\n\tif (GLOBAL (CurrentActivity) & CHECK_ABORT)\n\t\treturn FALSE;\n"
+   "#ifdef __3DS__\n\t{\n\t\tconst int p3go = port3ds_take_gameopt ();\n"
+   "\t\tif (p3go == SAVE_GAME || p3go == LOAD_GAME)\n\t\t{\n"
+   "\t\t\tpMS->CurState = (BYTE) p3go;\n\t\t\tDrawMenuStateStrings (PM_SAVE_GAME, p3go);\n"
+   "\t\t\tSetFlashRect (NULL);\n\t\t\tPickGame (p3go == SAVE_GAME, FALSE);\n"
+   "\t\t\treturn FALSE;\n\t\t}\n\t}\n#endif\n",
+   "port3ds_take_gameopt ()")
+
 print(f"patch_uqm: {applied} edits applied, {skipped} already present")

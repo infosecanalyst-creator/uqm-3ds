@@ -16,6 +16,7 @@
 #include "uqm/gamestr.h"
 #include "uqm/planets/planets.h"
 #include "libs/mathlib.h"
+#include "libs/timelib.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -75,6 +76,7 @@ port3ds_game_read (Port3DSShip *s)
 		if (s->star < 0 || s->star >= NUM_SOLAR_SYSTEMS)
 			s->star = -1;
 		s->have_pos = 1;
+		s->in_orbit = pSolarSysState && pSolarSysState->InOrbit;
 	}
 	s->dest_x = GLOBAL (autopilot.x);
 	s->dest_y = GLOBAL (autopilot.y);
@@ -146,4 +148,59 @@ port3ds_game_frame (void)
 			GLOBAL (autopilot.y) = (COORD) course_y;
 		}
 	}
+}
+
+/* ---- ship-menu shortcuts ------------------------------------------------- */
+
+static volatile int sc_item = -1, sc_gameopt = -1;
+static volatile TimeCount sc_time;
+
+void
+port3ds_request_shortcut (int sc)
+{
+	sc_item = -1;
+	sc_gameopt = (sc >= P3SC_SAVE) ? sc - P3SC_SAVE : -1;
+	sc_time = GetTimeCounter ();
+	sc_item = (sc >= P3SC_SAVE) ? P3SC_GAME : sc;
+}
+
+static int
+sc_valid (int in_orbit)
+{
+	const int it = sc_item;
+	if (it < 0)
+		return 0;
+	if (GetTimeCounter () - sc_time > 2 * ONE_SECOND)
+	{	/* nobody took it: never pop a menu up later by surprise */
+		sc_item = sc_gameopt = -1;
+		return 0;
+	}
+	return it != P3SC_SCAN || in_orbit;
+}
+
+int
+port3ds_shortcut_pending (int in_orbit)
+{
+	return sc_valid (in_orbit);
+}
+
+int
+port3ds_take_shortcut (int in_orbit)
+{
+	int it;
+	if (!sc_valid (in_orbit))
+		return -1;
+	it = sc_item;
+	sc_item = -1;
+	if (it != P3SC_GAME)
+		sc_gameopt = -1;
+	return it;
+}
+
+int
+port3ds_take_gameopt (void)
+{
+	const int g = sc_gameopt;
+	sc_gameopt = -1;
+	return g;
 }

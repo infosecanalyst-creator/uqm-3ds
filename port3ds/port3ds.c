@@ -367,7 +367,7 @@ enum {
 	ACT_NONE, ACT_PAUSE, ACT_HELP, ACT_SWAP, ACT_DIM, ACT_STATS,
 	ACT_KEYBOARD, ACT_HELP_PREV, ACT_HELP_CLOSE, ACT_HELP_NEXT,
 	ACT_REPLY, ACT_REPLY_MORE, ACT_SKIP, ACT_REPLAY,
-	ACT_MAP, ACT_GO, ACT_ZOOM_IN, ACT_ZOOM_OUT, ACT_SHIP
+	ACT_MAP, ACT_GO, ACT_ZOOM_IN, ACT_ZOOM_OUT, ACT_SHIP, ACT_SHORTCUT
 };
 typedef struct { short x, y, w, h; short act, arg; } Region;
 static Region regions[48];
@@ -511,7 +511,7 @@ static u64 last_nav_draw = 0;
 #define MAP_X 2
 #define MAP_Y 40
 #define MAP_W 212
-#define MAP_H 198
+#define MAP_H 170
 
 static float
 map_scale (void)
@@ -569,9 +569,21 @@ draw_nav (int ox)
 			name, ship.ru, ship.crew, ship.landers);
 	text (ox + 4, 26, buf, COL_TEXT, 0);
 
+	/* ship menu, one tap each (was B, then the cursor along the menu, then A) */
+	{
+		static const struct { const char *label; int sc; } sc[] = {
+			{ "SCAN", P3SC_SCAN }, { "DEVICES", P3SC_DEVICES }, { "CARGO", P3SC_CARGO },
+			{ "ROSTER", P3SC_ROSTER }, { "SAVE", P3SC_SAVE }, { "LOAD", P3SC_LOAD } };
+		const int first = ship.in_orbit ? 0 : 1, nb = 6 - first;
+		const int bw = (316 - (nb - 1) * 3) / nb;
+		for (i = first; i < 6; ++i)
+			button (ox + 2 + (i - first) * (bw + 3), 214, bw, 24, sc[i].label,
+					ACT_SHORTCUT, sc[i].sc, 0, 0, 1);
+	}
+
 	if (ship.quasispace || !ship.have_pos)
 	{
-		text_center (0, 120, deck_w, "No galaxy map here", COL_DIM, 1);
+		text_center (0, 110, deck_w, "No galaxy map here", COL_DIM, 1);
 		return;
 	}
 
@@ -698,7 +710,7 @@ draw_nav (int ox)
 						&& ship.dest_y == y0;
 				const int is_here = (sel_star == ship.star)
 						|| (x0 == ship.ux && y0 == ship.uy);
-				button (px - 2, 118, pw, 30,
+				button (px - 2, 112, pw, 28,
 						is_here ? "YOU ARE HERE" : is_dest ? "ON COURSE" : "SET COURSE",
 						ACT_GO, 0, !is_dest && !is_here, is_dest || is_here, 0);
 			}
@@ -710,9 +722,9 @@ draw_nav (int ox)
 			text (px, y, "and fuel.", COL_DIM, 0); y += 13;
 			text (px, y, "Drag to pan.", COL_DIM, 0);
 		}
-		button (px - 2, 154, 47, 26, "+", ACT_ZOOM_IN, 0, 0, map_zoom >= 3, 1);
-		button (px + 49, 154, 47, 26, "-", ACT_ZOOM_OUT, 0, 0, map_zoom <= 0, 1);
-		button (px - 2, 184, pw, 24, map_follow ? "SHIP (FOLLOW)" : "SHIP",
+		button (px - 2, 144, 47, 24, "+", ACT_ZOOM_IN, 0, 0, map_zoom >= 3, 1);
+		button (px + 49, 144, 47, 24, "-", ACT_ZOOM_OUT, 0, 0, map_zoom <= 0, 1);
+		button (px - 2, 171, pw, 20, map_follow ? "SHIP (FOLLOW)" : "SHIP",
 				ACT_SHIP, 0, 0, 0, 0);
 		if (ship.have_dest)
 		{
@@ -727,9 +739,9 @@ draw_nav (int ox)
 				port3ds_star_name (best, name, sizeof name);
 			else
 				strcpy (name, "map point");
-			text (px, 214, "COURSE:", COL_DIM, 0);
-			name[16] = '\0';
-			text (px, 226, name, COL_HOT, 0);
+			snprintf (buf, sizeof buf, "TO %s", name);
+			buf[16] = '\0';
+			text (px, 197, buf, COL_HOT, 0);
 		}
 	}
 }
@@ -1232,6 +1244,7 @@ do_action (int act, int arg, int px, int py)
 		case ACT_ZOOM_IN: if (map_zoom < 3) ++map_zoom; break;
 		case ACT_ZOOM_OUT: if (map_zoom > 0) --map_zoom; break;
 		case ACT_SHIP: map_follow = 1; break;
+		case ACT_SHORTCUT: port3ds_request_shortcut (arg); break;
 	}
 	deck_dirty = 1;
 }
