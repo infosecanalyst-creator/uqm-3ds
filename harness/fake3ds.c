@@ -213,3 +213,34 @@ SwkbdButton swkbdInputText (SwkbdState *s, char *out, size_t n)
 	strncpy (out, t, n - 1);
 	return SWKBD_BUTTON_CONFIRM;
 }
+
+/* ---- UQM3DS_FAKE_COMM: publish sample replies like comm.c would ---- */
+extern int port3ds_comm_frame (const char *const *texts, int n, int cur);
+static void *fake_comm (void *a)
+{
+	static const char *r[] = {
+		"Hello! We come in peace. Who are you, and what is this place?",
+		"I am Captain Zelnick of the Earthling starship Vindicator. We have travelled a very long way and would like to know more about your people, your history and your neighbours.",
+		"Prepare to be boarded!",
+		"Goodbye." };
+	int n = 4;
+	(void) a;
+	svcSleepThread (8000000000LL);
+	for (;;)
+	{
+		int pick = port3ds_comm_frame (r, n, 0);
+		if (pick >= 0)
+		{
+			fprintf (stderr, "[harness] reply picked: %d\n", pick);
+			svcSleepThread (3000000000LL);    /* the line is spoken */
+		}
+		svcSleepThread (30000000);
+	}
+	return NULL;
+}
+__attribute__((constructor)) static void start_fake_comm (void)
+{
+	pthread_t t;
+	if (getenv ("UQM3DS_FAKE_COMM"))
+		pthread_create (&t, NULL, fake_comm, NULL);
+}

@@ -8,7 +8,7 @@ include $(PORT)/sources.mk
 
 OBJDIR := obj
 SRCS   := $(addprefix $(UQM)/src/,$(UQM_SOURCES)) $(PORT)/port3ds.c $(PORT)/threads3ds.c \
-          $(PORT)/context3ds.c fake3ds.c
+          $(PORT)/game3ds.c fake3ds.c
 OBJS   := $(patsubst %.c,$(OBJDIR)/%.o,$(subst ../,,$(SRCS)))
 
 CFLAGS := -O2 -g -w -D__3DS__ -DUQM3DS_HARNESS -DNDEBUG -DGFXMODULE_SDL -DSDL_DIR=SDL \

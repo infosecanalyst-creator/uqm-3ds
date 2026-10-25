@@ -21,12 +21,19 @@ Sound needs `sdmc:/3ds/dspfirm.cdc` (same as every other homebrew with audio).
 
 ## Screens and controls
 
-Game on the top screen (1:1, pillar-boxed); the bottom screen is a control deck
-that always shows what each button does right now (menus, combat, HyperSpace,
-solar system, conversations, starbase, name entry), plus touch buttons:
-PAUSE, KEYBOARD (system keyboard whenever the game asks for a name), HELP
-(5 pages: controls, getting started, starmap, talking/fighting, this port),
-SWAP, SCREEN OFF (bottom backlight; touch to wake), STATS (fps + frame cost).
+The game runs pixel-for-pixel on the top screen. The bottom screen is a touch
+deck that changes with what you are doing, so the information and actions
+you need are one tap away instead of behind menus:
+
+| You are... | Bottom screen | Saves |
+|---|---|---|
+| Flying (HyperSpace, solar system) | Fuel / RU / crew / landers strip, touch galaxy map with your fuel range ring. Tap a star: name, distance, fuel needed (red if out of reach). Tap again or SET COURSE: the autopilot flies there. Drag to pan, +/- zoom. | Plotting a course was B > Starmap > 10-40 cursor presses > A > B; now 2 taps |
+| In a conversation | Every reply as a large, readable button; one tap says it. While the alien talks: SKIP and REPLAY | Up/Down x N + A, on 320x240 text |
+| Asked for a name | OPEN KEYBOARD (system keyboard) | Letter-by-letter picking |
+| In combat or menus | What each button does right now | - |
+
+Always-present toolbar: II pause, ? help (5 pages), SWAP screens, DIM the
+bottom backlight (touch to wake), FPS. ZL swaps screens, ZR opens help.
 
 | Button | Does |
 |---|---|
@@ -39,7 +46,7 @@ SWAP, SCREEN OFF (bottom backlight; touch to wake), STATS (fps + frame cost).
 | START / SELECT | pause / retreat (when allowed), cancel name |
 | ZL / ZR | swap screens / help |
 
-The layout choice and STATS persist in `sdmc:/3ds/uqm/port3ds.cfg`. UQM's own
+The layout choice and FPS persist in `sdmc:/3ds/uqm/port3ds.cfg`. UQM's own
 Setup menu (music, speech, subtitles, melee zoom) works as on PC.
 
 ## What was done for speed
@@ -64,7 +71,7 @@ Setup menu (music, speech, subtitles, melee zoom) works as on PC.
 | Path | What |
 |---|---|
 | `port3ds/` | the platform layer: screens, deck, input, keyboard, threads, config defaults |
-| `tools/patch_uqm.py` | 24 anchored, idempotent `#ifdef __3DS__` edits to UQM |
+| `tools/patch_uqm.py` | 28 anchored, idempotent `#ifdef __3DS__` edits to UQM |
 | `tools/repack_stored.py` | content pack repacker |
 | `Makefile.3ds` | cross build |
 | `harness/` | desktop test build: same code, fake libctru, scripted buttons, screenshots |

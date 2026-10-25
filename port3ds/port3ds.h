@@ -65,6 +65,30 @@ enum {
 };
 int port3ds_game_context (void);
 
+/* game3ds.c: ship status for the deck (main thread, read-only) */
+typedef struct {
+	int fuel;            /* FUEL_TANK_SCALE units: 100 = 1.0 on screen */
+	unsigned ru;
+	int crew, landers;
+	int have_pos, ux, uy;        /* universe coords, 0..9999, y up */
+	int have_dest, dest_x, dest_y;
+	int star;                    /* system we are in, or -1 */
+	int quasispace;
+} Port3DSShip;
+void port3ds_game_read (Port3DSShip *s);
+int port3ds_star_count (void);
+void port3ds_star_get (int i, int *x, int *y, int *color, int *size);
+void port3ds_star_name (int i, char *buf, int size);
+int port3ds_fuel_needed (int x0, int y0, int x1, int y1);
+/* main thread queues, game thread (DoInput) applies */
+void port3ds_request_course (int ux, int uy);
+void port3ds_game_frame (void);
+
+/* comm.c PlayerResponseInput(), game thread, once per frame while the
+ * player is choosing: publishes the replies, returns a reply tapped on
+ * the deck or -1 */
+int port3ds_comm_frame (const char *const *texts, int n, int cur);
+
 #ifdef __cplusplus
 }
 #endif

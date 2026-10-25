@@ -21,7 +21,7 @@ include $(PORT)/sources.mk
 CC := arm-none-eabi-gcc
 
 SRCS := $(addprefix $(UQM)/src/,$(UQM_SOURCES)) \
-        $(PORT)/port3ds.c $(PORT)/threads3ds.c $(PORT)/context3ds.c
+        $(PORT)/port3ds.c $(PORT)/threads3ds.c $(PORT)/game3ds.c
 OBJS := $(patsubst %.c,$(OBJDIR)/%.o,$(SRCS))
 
 ARCH   := -march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft

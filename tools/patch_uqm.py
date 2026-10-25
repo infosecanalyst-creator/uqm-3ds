@@ -158,4 +158,29 @@ rw("libs/sound/decoders/oggaud.c",
    "#if defined(OVCODEC_TREMOR) && !defined(__3DS__)\n\treturn ova->vf.os->pageno;\n",
    "#if defined(OVCODEC_TREMOR) && !defined(__3DS__)")
 
+# ---- gameinp.c: apply the deck's queued actions on the game thread -----------------
+rw("uqm/gameinp.c",
+   "\t\tUpdateInputState ();\n",
+   "\t\tUpdateInputState ();\n#ifdef __3DS__\n\t\tport3ds_game_frame ();\n#endif\n",
+   "port3ds_game_frame ();")
+rw("uqm/gameinp.c",
+   "#include \"libs/threadlib.h\"\n",
+   "#include \"libs/threadlib.h\"\n#ifdef __3DS__\n#\tinclude \"port3ds.h\"\n#endif\n",
+   '#\tinclude "port3ds.h"')
+
+# ---- comm.c: conversation replies as touch buttons on the deck ----------------------
+rw("uqm/comm.c",
+   "\tif (pES->top_response == (BYTE)~0)\n\t{\n\t\tpES->top_response = 0;\n\t\tRefreshResponses (pES);\n\t}\n\n\tif (PulsedInputState.menu[KEY_MENU_SELECT])\n",
+   "\tif (pES->top_response == (BYTE)~0)\n\t{\n\t\tpES->top_response = 0;\n\t\tRefreshResponses (pES);\n\t}\n\n"
+   "#ifdef __3DS__\n\t{\t/* one tap on the deck says a reply */\n\t\tconst char *texts[MAX_RESPONSES];\n\t\tint i, pick;\n"
+   "\t\tfor (i = 0; i < pES->num_responses; ++i)\n\t\t\ttexts[i] = pES->response_list[i].response_text.pStr;\n"
+   "\t\tpick = port3ds_comm_frame (texts, pES->num_responses, pES->cur_response);\n"
+   "\t\tif (pick >= 0 && pick < pES->num_responses)\n\t\t{\n\t\t\tpES->cur_response = (BYTE) pick;\n\t\t\tSelectResponse (pES);\n\t\t\treturn;\n\t\t}\n\t}\n#endif\n"
+   "\tif (PulsedInputState.menu[KEY_MENU_SELECT])\n",
+   "port3ds_comm_frame (texts")
+rw("uqm/comm.c",
+   "#include \"libs/log.h\"\n",
+   "#include \"libs/log.h\"\n#ifdef __3DS__\n#\tinclude \"port3ds.h\"\n#endif\n",
+   '#\tinclude "port3ds.h"')
+
 print(f"patch_uqm: {applied} edits applied, {skipped} already present")
