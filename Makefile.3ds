@@ -1,0 +1,64 @@
+# The Ur-Quan Masters for the New Nintendo 3DS.
+#   make -f Makefile.3ds -j8           -> uqm.3dsx
+# Needs devkitARM + libctru and these devkitPro packages:
+#   3ds-sdl 3ds-libpng 3ds-zlib 3ds-libogg 3ds-libvorbisidec
+# The UQM source must already be patched (tools/patch_uqm.py); build-uqm.sh
+# does both steps.
+ifeq ($(strip $(DEVKITPRO)),)
+$(error DEVKITPRO is not set)
+endif
+DEVKITARM ?= $(DEVKITPRO)/devkitARM
+PORTLIBS  := $(DEVKITPRO)/portlibs/3ds
+CTRULIB   := $(DEVKITPRO)/libctru
+export PATH := $(DEVKITARM)/bin:$(DEVKITPRO)/tools/bin:$(PORTLIBS)/bin:$(PATH)
+
+UQM    := uqm-0.8.0
+PORT   := port3ds
+OBJDIR := obj3ds
+TARGET := uqm
+include $(PORT)/sources.mk
+
+CC := arm-none-eabi-gcc
+
+SRCS := $(addprefix $(UQM)/src/,$(UQM_SOURCES)) \
+        $(PORT)/port3ds.c $(PORT)/threads3ds.c $(PORT)/context3ds.c
+OBJS := $(patsubst %.c,$(OBJDIR)/%.o,$(SRCS))
+
+ARCH   := -march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft
+# gnu11: UQM is 2000s C (old-style declarations clash with C23, gcc 16's
+# default). -O2 rather than UQM's desktop -O3: smaller code fits the ARM11's 16 KB
+# instruction cache better, which matters more here than unrolling.
+CFLAGS := -std=gnu11 -O2 -fomit-frame-pointer -ffunction-sections -fdata-sections \
+          -mword-relocations $(ARCH) -w \
+          -D__3DS__ -DARM11 -DNDEBUG -D_GNU_SOURCE \
+          -DGFXMODULE_SDL -DSDL_DIR=SDL -DUSE_INTERNAL_MIKMOD -DHAVE_ZIP=1 \
+          -DTHREADLIB_SDL -DOVCODEC_TREMOR \
+          -I$(PORT) -I$(UQM)/src -I$(UQM)/src/regex \
+          -I$(PORTLIBS)/include -I$(PORTLIBS)/include/SDL -I$(CTRULIB)/include
+LDFLAGS := -specs=3dsx.specs $(ARCH) -Wl,--gc-sections -Wl,-Map,$(TARGET).map \
+           -L$(PORTLIBS)/lib -L$(CTRULIB)/lib
+LIBS    := -lSDL -lvorbisidec -logg -lpng -lz -lcitro3d -lctru -lm
+
+all: $(TARGET).3dsx
+
+$(TARGET).elf: $(OBJS)
+	$(CC) $(LDFLAGS) $(OBJS) $(LIBS) -o $@
+
+$(TARGET).smdh: res/icon.png
+	smdhtool --create "The Ur-Quan Masters" "Star Control II, open source - New 3DS port" \
+		"UQM team / 3DS port" $< $@
+
+$(TARGET).3dsx: $(TARGET).elf $(TARGET).smdh
+	3dsxtool $< $@ --smdh=$(TARGET).smdh
+
+$(OBJDIR)/%.o: %.c
+	@mkdir -p $(dir $@)
+	@echo "  CC  $<"
+	@$(CC) $(CFLAGS) -MMD -MP -c -o $@ $<
+
+-include $(OBJS:.o=.d)
+
+clean:
+	rm -rf $(OBJDIR) $(TARGET).elf $(TARGET).3dsx $(TARGET).smdh $(TARGET).map
+
+.PHONY: all clean

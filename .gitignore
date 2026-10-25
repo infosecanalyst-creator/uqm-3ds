@@ -1,0 +1,13 @@
+uqm-0.8.0/
+downloads/
+obj3ds/
+*.elf
+*.3dsx
+*.smdh
+*.map
+uqm-build.log
+harness/obj/
+harness/snaps*/
+harness/uqm3ds-harness
+harness/s*.txt
+.transfer-scratch/
