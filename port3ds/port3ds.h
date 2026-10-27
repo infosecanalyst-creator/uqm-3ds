@@ -140,6 +140,11 @@ int port3ds_netdlg_frame (const char *host, const char *port, int delay, int sid
 int port3ds_netdlg_read (Port3DSNetDlg *d);
 void port3ds_netdlg_act (int act, const char *text);
 
+/* The flagship's screen position and facing (0 up, 16 steps clockwise) in
+ * HyperSpace or interplanetary flight; 0 elsewhere. */
+int port3ds_flight_ship (int *sx, int *sy, int *facing);
+extern volatile int port3ds_hs_facing;
+
 /* Stereo 3D: a depth per pixel of the main screen, set by tags in the draw
  * queue. Depth > 0 is behind the screen, < 0 in front of it. */
 void port3ds_depth_set (int depth);       /* game thread: tag what follows */

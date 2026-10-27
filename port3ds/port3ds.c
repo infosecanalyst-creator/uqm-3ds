@@ -173,7 +173,11 @@ read_small_file (const char *path, char *buf, int size)
 #define DECK_MAX_W 400
 #define DECK_H     240
 
-static u32 deck_px[DECK_MAX_W * DECK_H];
+static u32 deck_buf[DECK_MAX_W * DECK_H];
+/* play mode (game on the touch screen): buttons drawn over the game.
+ * Low byte is alpha: 0 shows the game, 0xFF covers it, between blends. */
+static u32 ovl_buf[320 * 240];
+static u32 *deck_px = deck_buf;
 static int deck_w = 320;
 
 static void
@@ -270,7 +274,7 @@ clear_fb_columns (u32 *fb, int x0, int w)
 
 enum { LAYOUT_GAME_TOP = 0, LAYOUT_GAME_BOTTOM = 1 };
 
-static int layout = LAYOUT_GAME_TOP;
+static int layout = LAYOUT_GAME_BOTTOM;   /* the game under the stylus */
 static SDL_Surface *video_surface = NULL;
 
 static int deck_dirty = 1;
@@ -297,7 +301,7 @@ static void
 save_port_settings (void)
 {
 	char buf[64];
-	snprintf (buf, sizeof buf, "layout=%d\nstats=%d\n", layout, show_stats);
+	snprintf (buf, sizeof buf, "screens=%d\nstats=%d\n", layout, show_stats);
 	write_file (PORT3DS_ROOT "/port3ds.cfg", buf);
 }
 
@@ -308,8 +312,10 @@ load_port_settings (void)
 	const char *p;
 	if (!read_small_file (PORT3DS_ROOT "/port3ds.cfg", buf, sizeof buf))
 		return;
-	if ((p = strstr (buf, "layout=")))
-		layout = atoi (p + 7) ? LAYOUT_GAME_BOTTOM : LAYOUT_GAME_TOP;
+	/* "screens" replaced "layout" when the game moved to the touch screen;
+	 * an old layout=0 is not carried over */
+	if ((p = strstr (buf, "screens=")))
+		layout = atoi (p + 8) ? LAYOUT_GAME_BOTTOM : LAYOUT_GAME_TOP;
 	if ((p = strstr (buf, "stats=")))
 		show_stats = atoi (p + 6) ? 1 : 0;
 }
@@ -362,6 +368,8 @@ set_backlight (int off)
  *  - Physical controls keep working everywhere; touch only ever adds.
  */
 
+enum { VK_UP, VK_DOWN, VK_LEFT, VK_RIGHT, VK_A, VK_B, VK_X, VK_Y,
+	VK_START, VK_SELECT, VK_L, VK_R, VK_COUNT };
 static void tap_key (int vk);
 static const char *net_local_ip (void);
 static void relayout (void);
@@ -375,7 +383,8 @@ enum {
 	ACT_KEYBOARD, ACT_HELP_PREV, ACT_HELP_CLOSE, ACT_HELP_NEXT,
 	ACT_REPLY, ACT_REPLY_MORE, ACT_SKIP, ACT_REPLAY,
 	ACT_MAP, ACT_GO, ACT_ZOOM_IN, ACT_ZOOM_OUT, ACT_SHIP, ACT_SHORTCUT,
-	ACT_MENU, ACT_PICK, ACT_NET, ACT_MELEE_OPT, ACT_MELEE_SLOT, ACT_MELEE_SHIP, ACT_MELEE_CANCEL
+	ACT_MENU, ACT_PICK, ACT_NET, ACT_GAME, ACT_TAB_MENU, ACT_TAB_MAP, ACT_MAP_CLOSE,
+	ACT_MELEE_OPT, ACT_MELEE_SLOT, ACT_MELEE_SHIP, ACT_MELEE_CANCEL
 };
 typedef struct { short x, y, w, h; short act, arg; } Region;
 static Region regions[64];
@@ -516,29 +525,27 @@ static int sel_star = -1;
 static Port3DSShip ship;
 static u64 last_nav_draw = 0;
 
-#define MAP_X 2
-#define MAP_Y 40
-#define MAP_W 212
-#define MAP_H 170
+static int map_x = 2, map_y = 40, map_w = 212, map_h = 170;
+static int nav_dash = 0;        /* drawing the map on the (untouchable) dashboard */
 
 static float
 map_scale (void)
 {
-	return (float) MAP_H / 10000.0f * (float) (1 << map_zoom);
+	return (float) map_h / 10000.0f * (float) (1 << map_zoom);
 }
 
 static void
 map_to_screen (int ox, int ux, int uy, int *sx, int *sy)
 {
 	const float s = map_scale ();
-	*sx = ox + MAP_X + MAP_W / 2 + (int) ((ux - map_cx) * s);
-	*sy = MAP_Y + MAP_H / 2 - (int) ((uy - map_cy) * s);
+	*sx = ox + map_x + map_w / 2 + (int) ((ux - map_cx) * s);
+	*sy = map_y + map_h / 2 - (int) ((uy - map_cy) * s);
 }
 
 static void
 put (int x, int y, u32 c, int ox)
 {
-	if (x >= ox + MAP_X && x < ox + MAP_X + MAP_W && y >= MAP_Y && y < MAP_Y + MAP_H)
+	if (x >= ox + map_x && x < ox + map_x + map_w && y >= map_y && y < map_y + map_h)
 		deck_px[y * deck_w + x] = c;
 }
 
@@ -578,6 +585,7 @@ draw_nav (int ox)
 	text (ox + 4, 26, buf, COL_TEXT, 0);
 
 	/* ship menu, one tap each (was B, then the cursor along the menu, then A) */
+	if (!nav_dash)
 	{
 		static const struct { const char *label; int sc; } sc[] = {
 			{ "SCAN", P3SC_SCAN }, { "DEVICES", P3SC_DEVICES }, { "CARGO", P3SC_CARGO },
@@ -602,10 +610,10 @@ draw_nav (int ox)
 	}
 
 	/* map frame */
-	fill (ox + MAP_X, MAP_Y, MAP_W, MAP_H, RGB (0x03, 0x05, 0x0C));
-	fill (ox + MAP_X - 1, MAP_Y - 1, MAP_W + 2, 1, COL_BTN_EDGE);
-	fill (ox + MAP_X - 1, MAP_Y + MAP_H, MAP_W + 2, 1, COL_BTN_EDGE);
-	add_region (ox + MAP_X, MAP_Y, MAP_W, MAP_H, ACT_MAP, 0);
+	fill (ox + map_x, map_y, map_w, map_h, RGB (0x03, 0x05, 0x0C));
+	fill (ox + map_x - 1, map_y - 1, map_w + 2, 1, COL_BTN_EDGE);
+	fill (ox + map_x - 1, map_y + map_h, map_w + 2, 1, COL_BTN_EDGE);
+	add_region (ox + map_x, map_y, map_w, map_h, ACT_MAP, 0);
 
 	/* fuel range: dotted circle around the ship */
 	{
@@ -681,6 +689,7 @@ draw_nav (int ox)
 	}
 
 	/* side panel */
+	if (!nav_dash)
 	{
 		const int px = ox + 218, pw = 98;
 		int y = 42;
@@ -836,6 +845,8 @@ deck_mode (void)
 		return MODE_PICK;
 	if (melee_on)
 		return MODE_MELEE;
+	if (deck_ctx == CTX3DS_ENCOUNTER && comm_fresh ())
+		return MODE_REPLIES;
 	if (menu_n > 0)
 		return MODE_MENU;
 	if (deck_ctx == CTX3DS_ENCOUNTER)
@@ -1194,6 +1205,583 @@ draw_deck (void)
 	}
 }
 
+/* ------------------------------------------------------------------ */
+/* play mode: the game on the touch screen, a dashboard on top          */
+/* ------------------------------------------------------------------ */
+/* The game's 320x240 frame fills the bottom screen 1:1 and the stylus acts
+ * on it: tap space to fly there, hold to steer, tap a Super Melee slot or
+ * button. Big buttons appear over the game only while they are needed
+ * (menus, replies, the ship picker). The top screen becomes a dashboard you
+ * glance at: the galaxy map and the ship's numbers. ZL swaps back to the
+ * game on top in 3D with the touch deck below. */
+
+static int map_open = 0;               /* galaxy map over the game (MAP tab) */
+static int steer_mode = 0;             /* 0 off, 1 follow the stylus, 2 fly to a point, 3 cruise */
+static int steer_tx, steer_ty, steer_best;
+static u64 steer_t0;
+static u64 touch_down_ms;
+
+static int
+play_mode (void)
+{
+	return layout == LAYOUT_GAME_BOTTOM;
+}
+
+static int
+flight_ctx (void)
+{
+	return deck_ctx == CTX3DS_HYPERSPACE || deck_ctx == CTX3DS_SOLARSYS;
+}
+
+static void
+target_overlay (void)
+{
+	deck_px = ovl_buf;
+	deck_w = 320;
+}
+
+static void
+target_dash (void)
+{
+	deck_px = deck_buf;
+	deck_w = 400;
+}
+
+#define SHADE(c, a) (((c) & 0xFFFFFF00u) | (u32) (a))
+
+static void
+steer_stop (void)
+{
+	if (steer_mode)
+	{
+		steer_mode = 0;
+		deck_dirty = 1;
+	}
+}
+
+/* ---- dashboard (top) ---- */
+
+static void
+draw_dash_flight (void)
+{
+	char buf[96], name[48];
+	const int sv_cx = map_cx, sv_cy = map_cy, sv_follow = map_follow;
+	const int px = 262;
+	int y = 42;
+
+	port3ds_game_read (&ship);
+	/* the map follows the ship here; the MAP tab keeps its own view */
+	map_x = 4; map_y = 40; map_w = 250; map_h = 196;
+	nav_dash = 1;
+	map_follow = 1;
+	draw_nav (0);
+	nav_dash = 0;
+	map_cx = sv_cx; map_cy = sv_cy; map_follow = sv_follow;
+	map_x = 2; map_y = 40; map_w = 212; map_h = 170;
+
+	if (ship.quasispace)
+	{
+		text (px, y, "QUASISPACE", COL_ACCENT, 0);
+		y += 18;
+	}
+	else if (deck_ctx == CTX3DS_HYPERSPACE && ship.have_pos)
+	{
+		text (px, y, "HYPERSPACE", COL_ACCENT, 0);
+		y += 13;
+		snprintf (buf, sizeof buf, "%d.%d : %d.%d", ship.ux / 10, ship.ux % 10,
+				ship.uy / 10, ship.uy % 10);
+		text (px, y, buf, COL_DIM, 0);
+		y += 18;
+	}
+	else if (ship.star >= 0)
+	{
+		char lines[2][64];
+		int nl, i;
+		port3ds_star_name (ship.star, name, sizeof name);
+		nl = wrap_text (name, 22, lines, 2);
+		for (i = 0; i < nl; ++i, y += 13)
+			text (px, y, lines[i], COL_ACCENT, 0);
+		text (px, y, ship.in_orbit ? "In orbit" : "Solar system", COL_DIM, 0);
+		y += 18;
+	}
+	if (ship.have_dest && !ship.quasispace)
+	{
+		int k, best = -1, need;
+		for (k = 0; k < port3ds_star_count (); ++k)
+		{
+			int x0, y0, c, sz;
+			port3ds_star_get (k, &x0, &y0, &c, &sz);
+			if (x0 == ship.dest_x && y0 == ship.dest_y)
+			{
+				best = k;
+				break;
+			}
+		}
+		if (best >= 0)
+			port3ds_star_name (best, name, sizeof name);
+		else
+			strcpy (name, "map point");
+		name[22] = '\0';
+		text (px, y, "COURSE", COL_DIM, 0); y += 13;
+		text (px, y, name, COL_HOT, 0); y += 13;
+		need = port3ds_fuel_needed (ship.ux, ship.uy, ship.dest_x, ship.dest_y);
+		k = need - 5 > 0 ? need - 5 : 0;
+		snprintf (buf, sizeof buf, "DIST  %d.%d", k / 10, k % 10);
+		text (px, y, buf, COL_TEXT, 0); y += 13;
+		fmt_fuel (name, sizeof name, need);
+		snprintf (buf, sizeof buf, "FUEL  %s", name);
+		text (px, y, buf, need > ship.fuel ? RGB (0xFF, 0x58, 0x58) : COL_TEXT, 0);
+		y += 18;
+	}
+	else
+	{
+		text (px, y, "No course set", COL_DIM, 0);
+		y += 18;
+	}
+	if (steer_mode)
+		text (px, y, steer_mode == 1 ? "Steering" : "Flying by touch", COL_HOT, 0);
+	y = 172;
+	text (px, y, "Tap space: fly there", COL_DIM, 0); y += 13;
+	text (px, y, "Hold: steer", COL_DIM, 0); y += 13;
+	text (px, y, "MAP: set a course", COL_DIM, 0); y += 13;
+	text (px, y, "MENU: ship menu", COL_DIM, 0); y += 13;
+	text (px, y, "ZL: game on top, 3D", COL_DIM, 0);
+}
+
+static void
+draw_dash_melee (void)
+{
+	int t;
+	for (t = 0; t < 2; ++t)
+	{
+		const int y0 = 30 + t * 92, ctl = melee.control[t == 0 ? 1 : 0];
+		char buf[64];
+		int i;
+		snprintf (buf, sizeof buf, "%s  %s", t == 0 ? "TOP" : "BOTTOM", melee.name[t]);
+		text (8, y0, buf, COL_ACCENT, 0);
+		snprintf (buf, sizeof buf, "%d PTS  %s", melee.value[t], control_name[ctl < 5 ? ctl : 0]);
+		text (392 - text_w (buf, 0), y0, buf, COL_DIM, 0);
+		for (i = 0; i < 14; ++i)
+		{
+			const int sh = melee.ships[t][i];
+			text (8 + (i % 7) * 55, y0 + 18 + (i / 7) * 16,
+					sh == 255 ? "-" : port3ds_ship_short (sh),
+					sh == 255 ? COL_OFF : COL_TEXT, 0);
+		}
+	}
+	text_center (0, 214, 400, "Touch screen: tap a ship slot to change it,", COL_DIM, 0);
+	text_center (0, 226, 400, "or the buttons on the right of the game", COL_DIM, 0);
+}
+
+static void
+draw_dashboard (void)
+{
+	const int mode = deck_mode ();
+	char buf[48];
+
+	target_dash ();
+	nregions = 0;
+	fill (0, 0, 400, 240, COL_BG);
+	fill (0, 0, 400, 22, COL_HEADER);
+	fill (0, 22, 400, 1, COL_BTN_EDGE);
+	text (6, 5, mode_title (mode), COL_ACCENT, 0);
+	if (show_stats)
+		snprintf (buf, sizeof buf, "%lu fps  %lu.%lu ms", (unsigned long) stat_fps,
+				(unsigned long) (stat_us / 1000), (unsigned long) ((stat_us % 1000) / 100));
+	else
+		snprintf (buf, sizeof buf, "ZL swap screens  ZR help");
+	text (394 - text_w (buf, 0), 5, buf, COL_DIM, 0);
+
+	if (flight_ctx () && mode != MODE_REPLIES && mode != MODE_TALK)
+	{
+		draw_dash_flight ();
+		return;
+	}
+	switch (mode)
+	{
+		case MODE_MELEE:
+		case MODE_PICK:
+		case MODE_NET:
+			draw_dash_melee ();
+			break;
+		case MODE_REPLIES:
+		case MODE_TALK:
+			draw_legend_list (40, legend_talk, 34);
+			text_center (0, 200, 400, mode == MODE_REPLIES
+					? "Tap your reply on the touch screen"
+					: "SKIP and REPLAY are on the touch screen", COL_DIM, 1);
+			break;
+		case MODE_TEXT:
+			draw_legend_list (40, legend_text, 34);
+			text_center (0, 200, 400, "OPEN KEYBOARD is on the touch screen", COL_DIM, 1);
+			break;
+		case MODE_MENU:
+			draw_legend_list (40, legend_menu, 34);
+			text_center (0, 200, 400, "Tap a choice on the touch screen", COL_DIM, 1);
+			break;
+		default:
+			draw_legend_list (40, deck_ctx == CTX3DS_COMBAT ? legend_combat
+					: deck_ctx == CTX3DS_STARBASE ? legend_starbase : legend_menu, 34);
+			break;
+	}
+}
+
+/* ---- overlay (bottom, over the game) ---- */
+
+static void
+ovl_page (const char *title, int close_act)
+{	/* a full-screen page that covers the game */
+	fill (0, 0, 320, 240, COL_BG);
+	fill (0, 0, 320, 22, COL_HEADER);
+	fill (0, 22, 320, 1, COL_BTN_EDGE);
+	text (5, 5, title, COL_ACCENT, 0);
+	if (close_act)
+		button (250, 2, 66, 18, "CLOSE", close_act, 0, 0, 0, 0);
+}
+
+static void
+draw_ovl_tabs (void)
+{
+	static const struct { const char *l; int act; int w; } t[] = {
+		{ "MENU", ACT_TAB_MENU, 56 }, { "MAP", ACT_TAB_MAP, 56 }, { "II", ACT_PAUSE, 34 },
+		{ "?", ACT_HELP, 34 }, { "SWAP", ACT_SWAP, 56 } };
+	int i, x = 2;
+	for (i = 0; i < 5; ++i)
+	{
+		button (x, 1, t[i].w, 16, t[i].l, t[i].act, 0, 0, 0, 0);
+		x += t[i].w + 2;
+	}
+	if (steer_mode == 2)
+	{	/* where the ship is flying to */
+		int k;
+		for (k = -4; k <= 4; ++k)
+		{
+			if (steer_tx + k >= 0 && steer_tx + k < 320 && steer_ty >= 0 && steer_ty < 240)
+				ovl_buf[steer_ty * 320 + steer_tx + k] = COL_HOT;
+			if (steer_ty + k >= 0 && steer_ty + k < 240 && steer_tx >= 0 && steer_tx < 320)
+				ovl_buf[(steer_ty + k) * 320 + steer_tx] = COL_HOT;
+		}
+	}
+}
+
+static void
+draw_ovl_menu (void)
+{
+	const int x = 6, w = 240, top = 22, bot = 236;
+	int i, h, gap = 3, total, y;
+	if (menu_n <= 0)
+		return;
+	h = (bot - top) / menu_n - gap;
+	if (h > 34)
+		h = 34;
+	total = menu_n * (h + gap) - gap;
+	y = top + (bot - top - total) / 2;
+	fill (x - 4, y - 4, w + 8, total + 8, SHADE (COL_BG, 0xC8));
+	for (i = 0; i < menu_n; ++i, y += h + gap)
+		button (x, y, w, h, menu_items[i].label, ACT_MENU, i,
+				menu_items[i].state == menu_cur, 0, h >= 18);
+}
+
+static void
+draw_ovl_replies (void)
+{
+	static char wrapped[MAX_REPLIES][3][64];
+	int i, n = 0, hs[MAX_REPLIES], nls[MAX_REPLIES], total = 0, more = 0, y;
+
+	SDL_mutexP (comm_lock);
+	if (comm_page >= comm_n)
+		comm_page = 0;
+	for (i = comm_page; i < comm_n && n < MAX_REPLIES; ++i)
+	{
+		const int nl = wrap_text (comm_text[i], 50, wrapped[n], 3);
+		const int h = 8 + nl * 13;
+		if (total + h + 3 > 164 && n > 0)
+		{
+			more = 1;
+			break;
+		}
+		hs[n] = h;
+		nls[n] = nl;
+		total += h + 3;
+		++n;
+	}
+	if (more || comm_page > 0)
+		total += 24;
+	y = 239 - total;
+	fill (0, y - 3, 320, 243 - y, SHADE (COL_BG, 0xE0));
+	for (i = 0; i < n; ++i)
+	{
+		const int idx = comm_page + i, hot = (idx == comm_cur);
+		int k;
+		box (3, y, 314, hs[i], hot ? COL_ACCENT : COL_BTN_EDGE, COL_BG);
+		box (4, y + 1, 312, hs[i] - 2,
+				(touch_live && touch_act == ACT_REPLY && touch_arg == idx)
+				? COL_BTN_DOWN : COL_BTN, hot ? COL_ACCENT : COL_BTN_EDGE);
+		for (k = 0; k < nls[i]; ++k)
+			text (9, y + 4 + k * 13, wrapped[i][k], COL_TEXT, 0);
+		add_region (3, y, 314, hs[i], ACT_REPLY, idx);
+		y += hs[i] + 3;
+	}
+	SDL_mutexV (comm_lock);
+	if (more || comm_page > 0)
+		button (3, y, 314, 21, more ? "MORE REPLIES  v" : "BACK TO FIRST  ^",
+				ACT_REPLY_MORE, 0, 0, 0, 0);
+}
+
+static void
+draw_overlay (void)
+{
+	const int mode = deck_mode ();
+	memset (ovl_buf, 0, sizeof ovl_buf);
+	target_overlay ();
+	nregions = 0;
+	switch (mode)
+	{
+		case MODE_HELP:
+			ovl_page ("HELP", 0);
+			draw_help (0);
+			break;
+		case MODE_TEXT:
+			button (40, 96, 240, 48, "OPEN KEYBOARD", ACT_KEYBOARD, 0, 1, 0, 1);
+			break;
+		case MODE_NET:
+			ovl_page ("NETWORK MELEE", 0);
+			draw_net (0);
+			break;
+		case MODE_PICK:
+			ovl_page ("PICK YOUR SHIP", 0);
+			draw_pick (0);
+			break;
+		case MODE_MELEE:
+			if (melee_pick_side >= 0)
+			{
+				ovl_page ("SUPER MELEE", ACT_MELEE_CANCEL);
+				draw_melee (0);
+			}
+			break;
+		case MODE_MENU:
+			draw_ovl_menu ();
+			break;
+		case MODE_REPLIES:
+			draw_ovl_replies ();
+			break;
+		case MODE_TALK:
+			button (4, 216, 96, 22, "<< REPLAY", ACT_REPLAY, 0, 0, 0, 0);
+			button (220, 216, 96, 22, "SKIP >>", ACT_SKIP, 0, 0, 0, 0);
+			break;
+		case MODE_NAV:
+			if (map_open)
+			{
+				ovl_page ("GALAXY MAP", ACT_MAP_CLOSE);
+				port3ds_game_read (&ship);
+				draw_nav (0);
+			}
+			else
+				draw_ovl_tabs ();
+			break;
+		default:
+			break;
+	}
+	target_dash ();
+}
+
+/* the game frame with the overlay on top, into a column-major framebuffer */
+static void
+blit_game_ovl (u32 *fb, const u32 *src, int pitch)
+{
+	int x, y;
+	for (x = 0; x < 320; ++x)
+	{
+		u32 *col = fb + x * 240 + 239;
+		const u32 *sp = src + x;
+		const u32 *o = ovl_buf + x;
+		for (y = 0; y < 240; ++y, sp += pitch, o += 320)
+		{
+			const u32 ov = *o, a = ov & 0xFF;
+			if (!a)
+				col[-y] = *sp;
+			else if (a == 0xFF)
+				col[-y] = ov;
+			else
+			{
+				const u32 g = *sp;
+				u32 r = 0xFF;
+				int sh;
+				for (sh = 8; sh < 32; sh += 8)
+				{
+					const u32 cg = (g >> sh) & 0xFF, co = (ov >> sh) & 0xFF;
+					r |= ((co * a + cg * (255 - a)) / 255) << sh;
+				}
+				col[-y] = r;
+			}
+		}
+	}
+}
+
+/* ---- the stylus on the game ---- */
+
+static void
+melee_tap (int x, int y)
+{
+	if (x < 246)
+	{	/* a fleet slot: 2 x 7 boxes of 34 px per team */
+		const int col = (x - 2) / 35;
+		int side, row;
+		if (x < 2 || col > 6)
+			return;
+		for (side = 0; side < 2; ++side)
+			for (row = 0; row < 2; ++row)
+			{
+				const int y0 = 21 + side * 92 + row * 35;
+				if (y >= y0 && y < y0 + 34)
+				{
+					melee_pick_side = side;
+					melee_pick_slot = row * 7 + col;
+					return;
+				}
+			}
+	}
+	else
+	{	/* the button column on the right */
+		int opt;
+		if (y < 22) opt = P3MO_NET_TOP;
+		else if (y < 57) opt = P3MO_CTRL_TOP;
+		else if (y < 67) opt = P3MO_SAVE_TOP;
+		else if (y < 78) opt = P3MO_LOAD_TOP;
+		else if (y < 143) opt = P3MO_BATTLE;
+		else if (y < 155) opt = P3MO_LOAD_BOT;
+		else if (y < 165) opt = P3MO_SAVE_BOT;
+		else if (y < 200) opt = P3MO_CTRL_BOT;
+		else if (y < 212) opt = P3MO_NET_BOT;
+		else opt = P3MO_QUIT;
+		if ((opt == P3MO_NET_TOP || opt == P3MO_NET_BOT) && !melee.net)
+			return;
+		port3ds_melee_option (opt);
+	}
+}
+
+static int
+game_flight_touchable (void)
+{
+	return play_mode () && flight_ctx () && deck_mode () == MODE_NAV && !map_open;
+}
+
+static void
+game_touch_down (int x, int y)
+{
+	steer_stop ();
+	touch_down_ms = osGetTime ();
+	if (game_flight_touchable ())
+	{
+		steer_mode = 1;
+		steer_tx = x;
+		steer_ty = y;
+		steer_t0 = osGetTime ();
+	}
+}
+
+static void
+game_touch_move (int x, int y)
+{
+	if (steer_mode == 1)
+	{
+		steer_tx = x;
+		steer_ty = y;
+	}
+}
+
+static void
+game_touch_up (int x, int y, int moved)
+{
+	const int tap = osGetTime () - touch_down_ms < 300 && !moved;
+	if (deck_mode () == MODE_MELEE && melee_pick_side < 0)
+	{
+		if (tap)
+			melee_tap (x, y);
+		return;
+	}
+	if (steer_mode != 1)
+		return;
+	steer_mode = 0;
+	if (tap && game_flight_touchable ())
+	{
+		int sx, sy, f;
+		if (!port3ds_flight_ship (&sx, &sy, &f))
+			return;
+		steer_t0 = osGetTime ();
+		if (deck_ctx == CTX3DS_SOLARSYS)
+		{	/* fly to the spot */
+			steer_mode = 2;
+			steer_tx = x;
+			steer_ty = y;
+			steer_best = 1 << 30;
+		}
+		else
+		{	/* HyperSpace scrolls with the ship: cruise that way */
+			steer_mode = 3;
+			steer_tx = x - sx;
+			steer_ty = y - sy;
+		}
+	}
+	deck_dirty = 1;
+}
+
+/* virtual buttons that turn the ship toward the target and thrust */
+static u32
+steer_keys (void)
+{
+	int sx, sy, f, dx, dy, t, diff, dist;
+	u32 k = 0;
+	if (!steer_mode)
+		return 0;
+	if (!game_flight_touchable () || !port3ds_flight_ship (&sx, &sy, &f)
+			|| osGetTime () - steer_t0 > 90000)
+	{
+		steer_stop ();
+		return 0;
+	}
+	if (steer_mode == 3)
+	{
+		dx = steer_tx;
+		dy = steer_ty;
+	}
+	else
+	{
+		dx = steer_tx - sx;
+		dy = steer_ty - sy;
+	}
+	dist = (int) sqrtf ((float) (dx * dx + dy * dy));
+	if (steer_mode == 2)
+	{
+		if (dist < 5)
+		{
+			steer_stop ();
+			return 0;
+		}
+		if (dist < steer_best)
+			steer_best = dist;
+		else if (dist > steer_best + 24)
+		{	/* overshot, or the view zoomed: stop rather than wander */
+			steer_stop ();
+			return 0;
+		}
+	}
+	if (dist < 4)
+		return 0;
+	{	/* facing 0 is up, 16 steps clockwise */
+		const float a = atan2f ((float) dx, (float) -dy);
+		t = ((int) floorf (a * 16.0f / 6.2831853f + 0.5f)) & 15;
+	}
+	diff = (t - f) & 15;
+	if (diff >= 1 && diff <= 8)
+		k |= 1u << VK_RIGHT;
+	else if (diff >= 9)
+		k |= 1u << VK_LEFT;
+	if (diff <= 1 || diff >= 15)
+		k |= 1u << VK_UP;
+	return k;
+}
+
 static void
 show_deck (void)
 {
@@ -1201,6 +1789,20 @@ show_deck (void)
 	u16 fw, fh;
 	u32 *fb;
 
+	if (play_mode ())
+	{
+		draw_dashboard ();
+		fb = (u32 *) gfxGetFramebuffer (GFX_TOP, GFX_LEFT, &fw, &fh);
+		blit_to_fb (fb, 0, deck_buf, 400, 400);
+		GSPGPU_FlushDataCache (fb, 400 * 240 * 4);
+		gfxScreenSwapBuffers (GFX_TOP, false);
+		draw_overlay ();
+		deck_dirty = 0;
+		if (video_surface)
+			port3ds_present (video_surface);      /* re-composite the bottom */
+		return;
+	}
+	deck_px = deck_buf;
 	deck_w = (scr == GFX_TOP) ? 400 : 320;
 	draw_deck ();
 	fb = (u32 *) gfxGetFramebuffer (scr, GFX_LEFT, &fw, &fh);
@@ -1467,7 +2069,10 @@ port3ds_present (SDL_Surface *frame)
 		clear_fb_columns (fb, 0, 40);
 		clear_fb_columns (fb, 360, 40);
 	}
-	blit_to_fb (fb, x0, (const u32 *) frame->pixels, 320, frame->pitch / 4);
+	if (scr == GFX_BOTTOM && play_mode ())
+		blit_game_ovl (fb, (const u32 *) frame->pixels, frame->pitch / 4);
+	else
+		blit_to_fb (fb, x0, (const u32 *) frame->pixels, 320, frame->pitch / 4);
 	GSPGPU_FlushDataCache (fb, (u32) (scr == GFX_TOP ? 400 : 320) * 240 * 4);
 	gfxScreenSwapBuffers (scr, false);
 
@@ -1524,8 +2129,6 @@ relayout (void)
  *   Y  y             flight thrust (second binding of "up")
  *   START Pause, SELECT Escape (retreat / cancel text), L/R PageUp/PageDown
  *   D-pad, Circle Pad, C-stick -> arrow keys */
-enum { VK_UP, VK_DOWN, VK_LEFT, VK_RIGHT, VK_A, VK_B, VK_X, VK_Y,
-	VK_START, VK_SELECT, VK_L, VK_R, VK_COUNT };
 
 static const SDLKey vk_sym[VK_COUNT] = {
 	SDLK_UP, SDLK_DOWN, SDLK_LEFT, SDLK_RIGHT, SDLK_RCTRL, SDLK_RSHIFT,
@@ -1613,6 +2216,8 @@ static void
 toggle_layout (void)
 {
 	layout = (layout == LAYOUT_GAME_TOP) ? LAYOUT_GAME_BOTTOM : LAYOUT_GAME_TOP;
+	map_open = 0;
+	steer_stop ();
 	help_page = -1;
 	touch_act = ACT_NONE;
 	touch_live = 0;
@@ -1670,6 +2275,7 @@ do_action (int act, int arg, int px, int py)
 				int x, y, c, sz;
 				port3ds_star_get (s, &x, &y, &c, &sz);
 				port3ds_request_course (x, y);
+				map_open = 0;
 			}
 			else
 				sel_star = s;
@@ -1681,12 +2287,16 @@ do_action (int act, int arg, int px, int py)
 				int x, y, c, sz;
 				port3ds_star_get (sel_star, &x, &y, &c, &sz);
 				port3ds_request_course (x, y);
+				map_open = 0;      /* course set: back to the game */
 			}
 			break;
 		case ACT_ZOOM_IN: if (map_zoom < 3) ++map_zoom; break;
 		case ACT_ZOOM_OUT: if (map_zoom > 0) --map_zoom; break;
 		case ACT_SHIP: map_follow = 1; break;
 		case ACT_SHORTCUT: port3ds_request_shortcut (arg); break;
+		case ACT_TAB_MENU: tap_key (VK_B); break;      /* B opens the ship menu in flight */
+		case ACT_TAB_MAP: map_open = 1; sel_star = -1; map_follow = 1; break;
+		case ACT_MAP_CLOSE: map_open = 0; break;
 		case ACT_MENU:
 			if (arg >= 0 && arg < menu_n)
 				port3ds_menu_pick (menu_base, menu_items[arg].state);
@@ -1735,8 +2345,6 @@ handle_touch (u32 down, u32 held, u32 up)
 		}
 		return;
 	}
-	if (deck_screen () != GFX_BOTTOM)
-		return;               /* the game itself has no pointer input */
 
 	if (held & KEY_TOUCH)
 	{
@@ -1746,13 +2354,21 @@ handle_touch (u32 down, u32 held, u32 up)
 		r = region_at (tp.px, tp.py);
 		if (down & KEY_TOUCH)
 		{
-			touch_act = r ? r->act : ACT_NONE;
+			touch_act = r ? r->act : (play_mode () ? ACT_GAME : ACT_NONE);
 			touch_arg = r ? r->arg : 0;
 			touch_live = 1;
 			drag_x0 = drag_last_x = tp.px;
 			drag_y0 = drag_last_y = tp.py;
 			dragging = 0;
 			deck_dirty = 1;
+			if (touch_act == ACT_GAME)
+				game_touch_down (tp.px, tp.py);
+		}
+		else if (touch_act == ACT_GAME)
+		{
+			if (abs (tp.px - drag_x0) > 6 || abs (tp.py - drag_y0) > 6)
+				dragging = 1;
+			game_touch_move (tp.px, tp.py);
 		}
 		else if (touch_act == ACT_MAP)
 		{	/* drag the map */
@@ -1787,11 +2403,14 @@ handle_touch (u32 down, u32 held, u32 up)
 	else if (up & KEY_TOUCH)
 	{
 		const int act = touch_act, arg = touch_arg;
-		const int fire = touch_live && act != ACT_NONE && !(act == ACT_MAP && dragging);
+		const int fire = touch_live && act != ACT_NONE && act != ACT_GAME
+				&& !(act == ACT_MAP && dragging);
 		touch_act = ACT_NONE;
 		touch_live = 0;
 		deck_dirty = 1;
-		if (fire)
+		if (act == ACT_GAME)
+			game_touch_up (last.px, last.py, dragging);
+		else if (fire)
 			do_action (act, arg, last.px, last.py);
 	}
 }
@@ -1823,6 +2442,11 @@ port3ds_pump_input (void)
 
 	/* buttons -> keys */
 	v = read_virtual_keys (kheld);
+	if (v & ((1u << VK_UP) | (1u << VK_DOWN) | (1u << VK_LEFT) | (1u << VK_RIGHT)
+			| (1u << VK_A) | (1u << VK_B)))
+		steer_stop ();            /* the buttons take over */
+	else
+		v |= steer_keys ();
 	changed = v ^ vk_held;
 	for (i = 0; i < VK_COUNT; ++i)
 	{
@@ -1845,6 +2469,8 @@ port3ds_pump_input (void)
 		{
 			deck_ctx = ctx;
 			deck_dirty = 1;
+			map_open = 0;
+			steer_stop ();
 		}
 	}
 	if (comm_changed)
@@ -1937,6 +2563,11 @@ port3ds_pump_input (void)
 		}
 	}
 	stereo_follow_slider ();
+	if (play_mode () && flight_ctx () && osGetTime () - last_nav_draw >= 250)
+	{	/* dashboard: the ship moves, refresh map and fuel 4x/s */
+		last_nav_draw = osGetTime ();
+		deck_dirty = 1;
+	}
 	if (deck_mode () == MODE_NAV && osGetTime () - last_nav_draw >= 250)
 		deck_dirty = 1;       /* the ship moves: refresh map and fuel 4x/s */
 	if (deck_dirty)

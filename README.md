@@ -21,24 +21,23 @@ Sound needs `sdmc:/3ds/dspfirm.cdc` (same as every other homebrew with audio).
 
 ## Screens and controls
 
-The game runs pixel-for-pixel on the top screen. The bottom screen is a touch
-deck that changes with what you are doing, so the information and actions
-you need are one tap away instead of behind menus:
+The game runs pixel-for-pixel on the **touch screen** and the stylus plays it;
+the **top screen** is a dashboard you glance at (the same split as the port's
+Dungeon Master and SimGolf layouts). ZL swaps: the game goes to the top screen
+with stereo 3D, and the touch controls move below it.
 
-| You are... | Bottom screen | Saves |
+| You are... | Touch screen (the game) | Top screen (dashboard) |
 |---|---|---|
-| Flying (HyperSpace, solar system) | Fuel / RU / crew / landers strip, touch galaxy map with your fuel range ring. Tap a star: name, distance, fuel needed (red if out of reach). Tap again or SET COURSE: the autopilot flies there. Drag to pan, +/- zoom. | Plotting a course was B > Starmap > 10-40 cursor presses > A > B; now 2 taps |
-| Flying, ship menu | One-tap row under the map: DEVICES, CARGO, ROSTER, SAVE, LOAD (+ SCAN in orbit). Each opens that screen directly and B returns to flight. | Saving was B > cursor to Game > A > A (save) ; now 1 tap |
-| In a conversation | Every reply as a large, readable button; one tap says it. While the alien talks: SKIP and REPLAY | Up/Down x N + A, on 320x240 text |
-| Asked for a name | OPEN KEYBOARD (system keyboard) | Letter-by-letter picking |
-| In any game menu (main menu, ship menu, orbit, planet scan, starbase, outfit, shipyard, game, settings, encounter) | The menu as large buttons with the current choice highlighted; one tap selects | Up/Down x N + A |
-| In Super Melee | Both fleets as a grid: tap a slot, pick a ship (with its cost); control type, Load, Save, Net, Battle!, Quit as buttons | Cursor around a 2x7 grid per fleet, then a 25-ship picker |
-| Choosing the next ship in a round | Your remaining ships as buttons, plus Random | Cursor + A |
-| Setting up netplay | Host (system keyboard), port, delay -/+, Connect / Wait / Cancel, and this 3DS's own IP to give your friend | Letter-by-letter entry |
-| In combat | What each button does right now | - |
+| Flying (HyperSpace, solar system) | Tap space: the ship flies there (HyperSpace: cruises that way). Hold: steer toward the stylus. Tabs: MENU, MAP (tap a star twice to set a course), pause, help, swap | Galaxy map following the ship with fuel range and course, fuel / RU / crew / landers, location, course distance and fuel |
+| In any game menu (main, ship, orbit, scan, starbase, outfit, shipyard, game, settings, encounter) | The menu as big buttons over the game, current choice lit | Button legend |
+| In a conversation | Every reply as a large button along the bottom, the alien above. SKIP / REPLAY while it talks | Button legend |
+| In Super Melee | Tap a ship slot (picker with costs) or the buttons on the right of the game | Both fleets, values and control types |
+| Choosing the next ship, setting up netplay | Big buttons over the game | Fleets |
+| In combat | The game, nothing over it | What each button does |
+| Asked for a name | OPEN KEYBOARD (system keyboard) | Legend |
 
-Always-present toolbar: II pause, ? help (5 pages), SWAP screens, DIM the
-bottom backlight (touch to wake), FPS. ZL swaps screens, ZR opens help.
+The swapped layout (game on top, 3D) keeps the full touch deck on the bottom
+screen: galaxy map, menu buttons, replies, Super Melee grid.
 
 | Button | Does |
 |---|---|

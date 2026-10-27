@@ -414,4 +414,11 @@ rw("libs/network/socket/socket_bsd.c",
    "Socket_setKeepAlive(Socket *sock) {\n\tint flag = 1;\n\n#ifdef __3DS__\t/* not offered by soc:u */\n\t(void) sock;\n\t(void) flag;\n\treturn 0;\n#endif\n",
    "#ifdef __3DS__\t/* not offered by soc:u */")
 
+# HyperSpace: the flagship's facing for steering by touch (read on the main thread)
+rw("uqm/ships/sis_ship/sis_ship.c",
+   "\tGLOBAL (velocity) = ElementPtr->velocity;\n\n\tGetElementStarShip (ElementPtr, &StarShipPtr);\n",
+   "\tGLOBAL (velocity) = ElementPtr->velocity;\n\n\tGetElementStarShip (ElementPtr, &StarShipPtr);\n"
+   "#ifdef __3DS__\n\tport3ds_hs_facing = StarShipPtr->ShipFacing;\n#endif\n",
+   "port3ds_hs_facing = StarShipPtr->ShipFacing;")
+
 print(f"patch_uqm: {applied} edits applied, {skipped} already present")

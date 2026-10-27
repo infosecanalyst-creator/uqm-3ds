@@ -25,6 +25,7 @@
 #include "uqm/supermelee/meleesetup.h"
 #include "uqm/supermelee/meleeship.h"
 #include "uqm/races.h"
+#include "uqm/units.h"
 #include "libs/graphics/tfb_draw.h"
 #include <stdint.h>
 #include <ctype.h>
@@ -630,4 +631,32 @@ port3ds_netdlg_act (int act, const char *text)
 {
 	snprintf (nd_text, sizeof nd_text, "%s", text ? text : "");
 	nd_act = act;
+}
+
+/* ---- the flagship on screen, for steering by touch ------------------------ */
+
+volatile int port3ds_hs_facing = -1;     /* set by sis_ship.c each HyperSpace frame */
+
+int
+port3ds_flight_ship (int *sx, int *sy, int *facing)
+{
+	const int ctx = port3ds_game_context ();
+	if (ctx == CTX3DS_HYPERSPACE)
+	{	/* the view scrolls with the ship: it stays in the middle */
+		if (port3ds_hs_facing < 0)
+			return 0;
+		*sx = SIS_ORG_X + SIS_SCREEN_WIDTH / 2;
+		*sy = SIS_ORG_Y + SIS_SCREEN_HEIGHT / 2;
+		*facing = port3ds_hs_facing & 15;
+		return 1;
+	}
+	if (ctx == CTX3DS_SOLARSYS && pSolarSysState && !pSolarSysState->InOrbit
+			&& pSolarSysState->InIpFlight)
+	{
+		*sx = SIS_ORG_X + GLOBAL (ShipStamp.origin.x);
+		*sy = SIS_ORG_Y + GLOBAL (ShipStamp.origin.y);
+		*facing = GetFrameIndex (GLOBAL (ShipStamp.frame)) & 15;
+		return 1;
+	}
+	return 0;
 }
