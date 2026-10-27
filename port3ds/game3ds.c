@@ -152,6 +152,8 @@ static void apply_menu_pick (void *input_state);
 void
 port3ds_game_frame (void *input_state)
 {
+	while (port3ds_manual_active)       /* reading the manual: the game waits */
+		SleepThread (ONE_SECOND / 20);
 	apply_menu_pick (input_state);
 	if (course_pending)
 	{

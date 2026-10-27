@@ -38,7 +38,8 @@
 #include "libs/input/sdl/input.h"   /* ProcessInputEvent() */
 #include "font_big.h"
 #include "font_small.h"
-#include "help3ds.h"
+#include "manual_text.h"
+#include <ctype.h>
 
 /* ------------------------------------------------------------------ */
 /* configuration written on first run                                  */
@@ -280,7 +281,9 @@ static SDL_Surface *video_surface = NULL;
 static int deck_dirty = 1;
 static int deck_ctx = -1;
 static volatile int char_mode = 0;
-static int help_page = -1;          /* -1 = closed */
+static int help_page = -1;          /* the manual: -1 = closed */
+volatile int port3ds_manual_active = 0;   /* the game waits while it is open */
+static int stereo_on;
 static int backlight_off = 0;
 static int show_stats = 0;
 static int lcd_ok = 0;
@@ -380,7 +383,7 @@ static void set_backlight (int off);
 /* ---- touch regions, rebuilt on every draw ---- */
 enum {
 	ACT_NONE, ACT_PAUSE, ACT_HELP, ACT_SWAP, ACT_DIM, ACT_STATS,
-	ACT_KEYBOARD, ACT_HELP_PREV, ACT_HELP_CLOSE, ACT_HELP_NEXT,
+	ACT_KEYBOARD, ACT_HELP_PREV, ACT_HELP_CLOSE, ACT_HELP_NEXT, ACT_MAN_SEC,
 	ACT_REPLY, ACT_REPLY_MORE, ACT_SKIP, ACT_REPLAY,
 	ACT_MAP, ACT_GO, ACT_ZOOM_IN, ACT_ZOOM_OUT, ACT_SHIP, ACT_SHORTCUT,
 	ACT_MENU, ACT_PICK, ACT_NET, ACT_GAME, ACT_TAB_MENU, ACT_TAB_MAP, ACT_MAP_CLOSE,
@@ -861,7 +864,7 @@ mode_title (int mode)
 {
 	switch (mode)
 	{
-		case MODE_HELP: return "HELP";
+		case MODE_HELP: return "MANUAL";
 		case MODE_TEXT: return "ENTER A NAME";
 		case MODE_REPLIES: return "YOUR REPLY";
 		case MODE_TALK: return "ENCOUNTER";
@@ -971,14 +974,20 @@ draw_menu (int ox)
 		text (ox + 4, 26, buf, COL_TEXT, 0);
 		y = 42;
 	}
-	h = (238 - y) / (menu_n > 0 ? menu_n : 1) - gap;
-	if (h > 40)
-		h = 40;
-	if (h < 18)
-		gap = 2, h = (238 - y) / menu_n - gap;
-	for (i = 0; i < menu_n; ++i, y += h + gap)
-		button (ox + 6, y, 308, h, menu_items[i].label, ACT_MENU, i,
-				menu_items[i].state == menu_cur, 0, h >= 18);
+	{
+		const int n = menu_n + (menu_base == P3M_MAIN);   /* + MANUAL on the main menu */
+		h = (238 - y) / (n > 0 ? n : 1) - gap;
+		if (h > 40)
+			h = 40;
+		if (h < 18)
+			gap = 2, h = (238 - y) / n - gap;
+		for (i = 0; i < n; ++i, y += h + gap)
+			if (i == menu_n)
+				button (ox + 6, y, 308, h, "MANUAL", ACT_HELP, 0, 0, 0, h >= 18);
+			else
+				button (ox + 6, y, 308, h, menu_items[i].label, ACT_MENU, i,
+						menu_items[i].state == menu_cur, 0, h >= 18);
+	}
 }
 
 static const char *const control_name[5] = {
@@ -1127,21 +1136,350 @@ draw_melee (int ox)
 		text_center (0, 228, deck_w, "Tap a slot to change its ship", COL_DIM, 0);
 }
 
+/* ---- the instruction manual --------------------------------------------
+ * Opened from the main menu, the ? button and ZR. The top screen is for
+ * reading (a section's text, scrolled with the pad), the touch screen for
+ * choosing (a button per section). L / R step through sections, B / Start /
+ * ZR close, and it reopens where it was left. The game waits underneath.
+ * The text is manual.txt built in (tools/embed_manual.py); a manual.txt in
+ * sdmc:/3ds/uqm/ replaces it. Format: "# " section, "## " heading, "- " list
+ * item, "1. " step, "| a | b" two-column row, blank line ends a paragraph. */
+
+#define MAN_W 63                /* characters per line on the top screen */
+#define MAN_COL 18              /* width of a table's first column */
+#define MAN_ROWS 15
+#define MAN_MAX_SEC 24
+#define MAN_MAX_LINES 1400
+enum { ML_TEXT, ML_HEAD, ML_TABLE, ML_BLANK };
+typedef struct { unsigned char kind; char a[MAN_W + 1]; char b[MAN_W + 1]; } ManLine;
+typedef struct { char title[32]; int first, count; } ManSec;
+static ManLine man_lines[MAN_MAX_LINES];
+static ManSec man_secs[MAN_MAX_SEC];
+static int man_nsec = 0, man_nlines = 0;
+static int man_cur = 0, man_scroll[MAN_MAX_SEC];
+static u32 man_buf[400 * 240];  /* the top screen while the game is up there */
+
+static ManLine *
+man_add (int kind)
+{
+	ManLine *l;
+	if (man_nlines >= MAN_MAX_LINES || !man_nsec)
+		return NULL;
+	l = &man_lines[man_nlines++];
+	memset (l, 0, sizeof *l);
+	l->kind = (unsigned char) kind;
+	man_secs[man_nsec - 1].count++;
+	return l;
+}
+
+static int
+man_last_blank (void)
+{
+	const ManSec *sec = &man_secs[man_nsec - 1];
+	return !sec->count || man_lines[man_nlines - 1].kind == ML_BLANK;
+}
+
+/* how much of s fits in room characters, broken at a space */
+static int
+man_cut (const char *s, int room)
+{
+	int len = (int) strlen (s), cut;
+	if (len <= room)
+		return len;
+	cut = room;
+	while (cut > 0 && s[cut] != ' ')
+		--cut;
+	return cut ? cut : room;
+}
+
+static void
+man_wrap (const char *s, const char *pre)
+{
+	const int pl = (int) strlen (pre);
+	int first = 1;
+	for (;;)
+	{
+		ManLine *l;
+		int cut;
+		while (*s == ' ')
+			++s;
+		if (!*s && !first)
+			break;
+		cut = man_cut (s, MAN_W - pl);
+		if (!(l = man_add (ML_TEXT)))
+			return;
+		snprintf (l->a, sizeof l->a, "%-*s%.*s", pl, first ? pre : "", cut, s);
+		s += cut;
+		first = 0;
+		if (!*s)
+			break;
+	}
+}
+
+static void
+man_table (const char *c1, const char *c2)
+{
+	int first = 1;
+	for (;;)
+	{
+		ManLine *l;
+		int cut;
+		while (*c2 == ' ')
+			++c2;
+		cut = man_cut (c2, MAN_W - MAN_COL);
+		if (!(l = man_add (ML_TABLE)))
+			return;
+		snprintf (l->a, MAN_COL, "%s", first ? c1 : "");
+		snprintf (l->b, sizeof l->b, "%.*s", cut, c2);
+		c2 += cut;
+		first = 0;
+		while (*c2 == ' ')
+			++c2;
+		if (!*c2)
+			break;
+	}
+}
+
+static void
+man_trim (char *t)
+{
+	char *e;
+	while (*t == ' ')
+		memmove (t, t + 1, strlen (t));
+	e = t + strlen (t);
+	while (e > t && (e[-1] == ' ' || e[-1] == '|'))
+		*--e = '\0';
+}
+
+static void
+man_parse (const char *p)
+{
+	static char para[4096];
+	char line[512];
+	int plen = 0;
+	man_nsec = man_nlines = 0;
+#define MAN_FLUSH() do { if (plen) { para[plen] = '\0'; man_wrap (para, ""); plen = 0; } } while (0)
+	while (*p)
+	{
+		const char *e = strchr (p, '\n');
+		int n = e ? (int) (e - p) : (int) strlen (p);
+		if (n > (int) sizeof line - 1)
+			n = sizeof line - 1;
+		memcpy (line, p, (size_t) n);
+		line[n] = '\0';
+		if (n && line[n - 1] == '\r')
+			line[--n] = '\0';
+		p = e ? e + 1 : p + strlen (p);
+
+		if (!strncmp (line, "# ", 2))
+		{
+			MAN_FLUSH ();
+			if (man_nsec < MAN_MAX_SEC)
+			{
+				ManSec *sec = &man_secs[man_nsec++];
+				snprintf (sec->title, sizeof sec->title, "%s", line + 2);
+				sec->first = man_nlines;
+				sec->count = 0;
+			}
+		}
+		else if (!man_nsec)
+			continue;
+		else if (!strncmp (line, "## ", 3))
+		{
+			ManLine *l;
+			MAN_FLUSH ();
+			if (!man_last_blank ())
+				man_add (ML_BLANK);
+			if ((l = man_add (ML_HEAD)))
+				snprintf (l->a, sizeof l->a, "%s", line + 3);
+		}
+		else if (!strncmp (line, "- ", 2))
+		{
+			MAN_FLUSH ();
+			man_wrap (line + 2, "- ");
+		}
+		else if (isdigit ((unsigned char) line[0]) && line[1] == '.' && line[2] == ' ')
+		{
+			char pre[4] = { line[0], '.', ' ', '\0' };
+			MAN_FLUSH ();
+			man_wrap (line + 3, pre);
+		}
+		else if (line[0] == '|')
+		{
+			char *c1 = line + 1, *bar = strchr (c1, '|');
+			MAN_FLUSH ();
+			if (bar)
+			{
+				*bar = '\0';
+				man_trim (c1);
+				man_trim (bar + 1);
+				man_table (c1, bar + 1);
+			}
+		}
+		else if (!line[0])
+		{
+			MAN_FLUSH ();
+			if (!man_last_blank ())
+				man_add (ML_BLANK);
+		}
+		else if (plen + n + 2 < (int) sizeof para)
+		{
+			if (plen)
+				para[plen++] = ' ';
+			memcpy (para + plen, line, (size_t) n);
+			plen += n;
+		}
+	}
+	MAN_FLUSH ();
+#undef MAN_FLUSH
+	/* no trailing blank lines */
+	{
+		int i;
+		for (i = 0; i < man_nsec; ++i)
+			while (man_secs[i].count
+					&& man_lines[man_secs[i].first + man_secs[i].count - 1].kind == ML_BLANK)
+				man_secs[i].count--;
+	}
+}
+
+static void
+man_load (void)
+{
+	FILE *f = fopen (PORT3DS_ROOT "/manual.txt", "rb");
+	if (f)
+	{
+		char *buf = (char *) malloc (65536);
+		if (buf)
+		{
+			const size_t n = fread (buf, 1, 65535, f);
+			buf[n] = '\0';
+			man_parse (buf);
+			free (buf);
+		}
+		fclose (f);
+	}
+	if (!man_nsec)
+		man_parse (manual_builtin);
+	if (man_cur >= man_nsec)
+		man_cur = 0;
+}
+
+static void
+man_open (void)
+{
+	man_load ();
+	help_page = 0;
+	port3ds_manual_active = 1;
+	if (stereo_on)
+	{	/* the manual is flat; the presenter turns 3D back on after */
+		gfxSet3D (false);
+		stereo_on = 0;
+	}
+	deck_dirty = 1;
+}
+
+static void
+man_close (void)
+{
+	help_page = -1;
+	port3ds_manual_active = 0;
+	deck_dirty = 1;
+	if (layout == LAYOUT_GAME_TOP && video_surface)
+		port3ds_present (video_surface);    /* the game back on top */
+}
+
+static void
+man_step (int d)
+{
+	if (!man_nsec)
+		return;
+	man_cur = (man_cur + d + man_nsec) % man_nsec;
+	deck_dirty = 1;
+}
+
+static void
+man_scroll_by (int d)
+{
+	const int max = man_nsec ? man_secs[man_cur].count - MAN_ROWS : 0;
+	int v = man_scroll[man_cur] + d;
+	if (v > max) v = max;
+	if (v < 0) v = 0;
+	if (v != man_scroll[man_cur])
+	{
+		man_scroll[man_cur] = v;
+		deck_dirty = 1;
+	}
+}
+
+/* the reading side: into a 400-wide target (deck_px / deck_w) */
+static void
+draw_man_top (void)
+{
+	char buf[48];
+	const ManSec *sec;
+	int i, top, max;
+	fill (0, 0, 400, 240, COL_BG);
+	fill (0, 0, 400, 22, COL_HEADER);
+	fill (0, 22, 400, 1, COL_BTN_EDGE);
+	text (6, 5, "MANUAL", COL_ACCENT, 0);
+	if (!man_nsec)
+	{
+		text (8, 40, "No manual text found.", COL_DIM, 0);
+		return;
+	}
+	sec = &man_secs[man_cur];
+	text (54, 5, sec->title, COL_TEXT, 0);
+	snprintf (buf, sizeof buf, "%d / %d", man_cur + 1, man_nsec);
+	text (394 - text_w (buf, 0), 5, buf, COL_DIM, 0);
+	max = sec->count - MAN_ROWS;
+	if (max < 0)
+		max = 0;
+	top = man_scroll[man_cur] > max ? max : man_scroll[man_cur];
+	for (i = 0; i < MAN_ROWS && top + i < sec->count; ++i)
+	{
+		const ManLine *l = &man_lines[sec->first + top + i];
+		const int y = 28 + i * 13;
+		switch (l->kind)
+		{
+			case ML_HEAD: text (8, y, l->a, COL_ACCENT, 0); break;
+			case ML_TABLE:
+				text (8, y, l->a, COL_HOT, 0);
+				text (8 + MAN_COL * 6, y, l->b, COL_TEXT, 0);
+				break;
+			case ML_TEXT: text (8, y, l->a, COL_TEXT, 0); break;
+			default: break;
+		}
+	}
+	if (max > 0)
+	{	/* scroll bar */
+		const int h = 195 * MAN_ROWS / sec->count;
+		fill (394, 28, 3, 195, COL_CHIP);
+		fill (394, 28 + (195 - h) * top / max, 3, h, COL_ACCENT);
+	}
+	fill (0, 224, 400, 16, COL_HEADER);
+	text (6, 226, "Pad: scroll    L / R: section    B: close", COL_DIM, 0);
+}
+
+/* the choosing side: a button per section */
+static void
+draw_man_buttons (int ox)
+{
+	int i;
+	for (i = 0; i <= man_nsec && i < 16; ++i)
+	{
+		const int c = i & 1, r = i / 2;
+		if (i == man_nsec)
+			button (ox + 4 + c * 158, 26 + r * 26, 154, 24, "CLOSE", ACT_HELP_CLOSE, 0, 0, 0, 0);
+		else
+			button (ox + 4 + c * 158, 26 + r * 26, 154, 24, man_secs[i].title,
+					ACT_MAN_SEC, i, i == man_cur, 0, 0);
+	}
+}
+
 static void
 draw_help (int ox)
 {
-	const HelpPage3DS *pg = &help_pages[help_page];
-	char buf[32];
-	int i;
-	snprintf (buf, sizeof buf, "%d / %d", help_page + 1, HELP_PAGE_COUNT);
-	text (ox + 8, 27, pg->title, COL_ACCENT, 0);
-	text (ox + 312 - text_w (buf, 0), 27, buf, COL_DIM, 0);
-	for (i = 0; i < 12 && pg->lines[i]; ++i)
-		text (ox + 4, 42 + i * 13, pg->lines[i], COL_TEXT, 0);
-	button (ox + 6, 206, 100, 30, "< PREV", ACT_HELP_PREV, 0, 0, help_page == 0, 1);
-	button (ox + 110, 206, 100, 30, "CLOSE", ACT_HELP_CLOSE, 0, 0, 0, 1);
-	button (ox + 214, 206, 100, 30, "NEXT >", ACT_HELP_NEXT, 0, 0,
-			help_page + 1 >= HELP_PAGE_COUNT, 1);
+	draw_man_buttons (ox);
 }
 
 static void
@@ -1392,6 +1730,11 @@ draw_dashboard (void)
 		snprintf (buf, sizeof buf, "ZL swap screens  ZR help");
 	text (394 - text_w (buf, 0), 5, buf, COL_DIM, 0);
 
+	if (mode == MODE_HELP)
+	{
+		draw_man_top ();
+		return;
+	}
 	if (flight_ctx () && mode != MODE_REPLIES && mode != MODE_TALK)
 	{
 		draw_dash_flight ();
@@ -1468,18 +1811,22 @@ static void
 draw_ovl_menu (void)
 {
 	const int x = 6, w = 240, top = 22, bot = 236;
+	const int n = menu_n + (menu_base == P3M_MAIN);   /* + MANUAL on the main menu */
 	int i, h, gap = 3, total, y;
 	if (menu_n <= 0)
 		return;
-	h = (bot - top) / menu_n - gap;
+	h = (bot - top) / n - gap;
 	if (h > 34)
 		h = 34;
-	total = menu_n * (h + gap) - gap;
+	total = n * (h + gap) - gap;
 	y = top + (bot - top - total) / 2;
 	fill (x - 4, y - 4, w + 8, total + 8, SHADE (COL_BG, 0xC8));
-	for (i = 0; i < menu_n; ++i, y += h + gap)
-		button (x, y, w, h, menu_items[i].label, ACT_MENU, i,
-				menu_items[i].state == menu_cur, 0, h >= 18);
+	for (i = 0; i < n; ++i, y += h + gap)
+		if (i == menu_n)
+			button (x, y, w, h, "MANUAL", ACT_HELP, 0, 0, 0, h >= 18);
+		else
+			button (x, y, w, h, menu_items[i].label, ACT_MENU, i,
+					menu_items[i].state == menu_cur, 0, h >= 18);
 }
 
 static void
@@ -1538,8 +1885,8 @@ draw_overlay (void)
 	switch (mode)
 	{
 		case MODE_HELP:
-			ovl_page ("HELP", 0);
-			draw_help (0);
+			ovl_page ("MANUAL", 0);
+			draw_man_buttons (0);
 			break;
 		case MODE_TEXT:
 			button (40, 96, 240, 48, "OPEN KEYBOARD", ACT_KEYBOARD, 0, 1, 0, 1);
@@ -1802,6 +2149,16 @@ show_deck (void)
 			port3ds_present (video_surface);      /* re-composite the bottom */
 		return;
 	}
+	if (help_page >= 0)
+	{	/* the manual takes the top screen from the game */
+		u32 *t = (u32 *) gfxGetFramebuffer (GFX_TOP, GFX_LEFT, &fw, &fh);
+		deck_px = man_buf;
+		deck_w = 400;
+		draw_man_top ();
+		blit_to_fb (t, 0, man_buf, 400, 400);
+		GSPGPU_FlushDataCache (t, 400 * 240 * 4);
+		gfxScreenSwapBuffers (GFX_TOP, false);
+	}
 	deck_px = deck_buf;
 	deck_w = (scr == GFX_TOP) ? 400 : 320;
 	draw_deck ();
@@ -2033,7 +2390,7 @@ port3ds_present (SDL_Surface *frame)
 	u16 fw, fh;
 	u32 *fb;
 
-	if (!frame)
+	if (!frame || (help_page >= 0 && scr == GFX_TOP))
 		return;
 	/* UQM redraws as fast as its main loop spins during fades (hundreds of
 	 * presents a second). Cap at the LCD's 60 Hz: the sleep hands the core
@@ -2225,12 +2582,6 @@ toggle_layout (void)
 	relayout ();
 }
 
-static void
-help_next (void)
-{
-	help_page = (help_page + 1 >= HELP_PAGE_COUNT) ? -1 : help_page + 1;
-	deck_dirty = 1;
-}
 
 static void
 do_action (int act, int arg, int px, int py)
@@ -2239,14 +2590,15 @@ do_action (int act, int arg, int px, int py)
 	switch (act)
 	{
 		case ACT_PAUSE: tap_key (VK_START); break;
-		case ACT_HELP: help_page = (help_page < 0) ? 0 : -1; break;
+		case ACT_HELP: if (help_page < 0) man_open (); else man_close (); break;
 		case ACT_SWAP: toggle_layout (); return;
 		case ACT_DIM: set_backlight (1); break;
 		case ACT_STATS: show_stats = !show_stats; save_port_settings (); break;
 		case ACT_KEYBOARD: if (char_mode) open_keyboard (); return;
-		case ACT_HELP_PREV: if (help_page > 0) --help_page; break;
-		case ACT_HELP_CLOSE: help_page = -1; break;
-		case ACT_HELP_NEXT: if (help_page + 1 < HELP_PAGE_COUNT) ++help_page; break;
+		case ACT_HELP_PREV: man_step (-1); break;
+		case ACT_HELP_CLOSE: man_close (); break;
+		case ACT_HELP_NEXT: man_step (1); break;
+		case ACT_MAN_SEC: if (arg >= 0 && arg < man_nsec) man_cur = arg; break;
 		case ACT_REPLY:
 			SDL_mutexP (comm_lock);
 			if (arg < comm_n)
@@ -2434,15 +2786,43 @@ port3ds_pump_input (void)
 		toggle_layout ();
 	if (kdown & KEY_ZR)
 	{
-		if (help_page < 0) { help_page = 0; deck_dirty = 1; }
-		else help_next ();
+		if (help_page < 0)
+			man_open ();
+		else
+			man_close ();
 	}
 
 	handle_touch (kdown, kheld, kup);
 
 	/* buttons -> keys */
 	v = read_virtual_keys (kheld);
-	if (v & ((1u << VK_UP) | (1u << VK_DOWN) | (1u << VK_LEFT) | (1u << VK_RIGHT)
+	if (help_page >= 0)
+	{	/* reading the manual: the buttons are its own, the game gets none */
+		static u32 last_v = 0;
+		static u64 next_scroll = 0;
+		const u64 now = osGetTime ();
+		const u32 ud = v & ((1u << VK_UP) | (1u << VK_DOWN));
+		if (kdown & (KEY_B | KEY_START))
+			man_close ();
+		else if (kdown & KEY_L)
+			man_step (-1);
+		else if (kdown & KEY_R)
+			man_step (1);
+		if (ud && (ud & ~last_v))
+		{
+			man_scroll_by ((ud & (1u << VK_UP)) ? -1 : 1);
+			next_scroll = now + 300;
+		}
+		else if (ud && now >= next_scroll)
+		{
+			man_scroll_by ((ud & (1u << VK_UP)) ? -1 : 1);
+			next_scroll = now + 60;
+		}
+		last_v = v;
+		v = 0;
+		steer_stop ();
+	}
+	else if (v & ((1u << VK_UP) | (1u << VK_DOWN) | (1u << VK_LEFT) | (1u << VK_RIGHT)
 			| (1u << VK_A) | (1u << VK_B)))
 		steer_stop ();            /* the buttons take over */
 	else

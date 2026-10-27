@@ -33,6 +33,7 @@ LOG="$HERE/uqm-build.log"; : > "$LOG"
   echo "=== source + 3DS patches"
   [ -d uqm-0.8.0 ] || tar xzf downloads/uqm-0.8.0-src.tgz
   python3 tools/patch_uqm.py uqm-0.8.0 || exit 1
+  python3 tools/embed_manual.py port3ds || exit 1
 
   echo "=== build"
   make -f Makefile.3ds -j"$(nproc)" || { echo "BUILD FAILED"; exit 1; }

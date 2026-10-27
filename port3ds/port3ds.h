@@ -145,6 +145,9 @@ void port3ds_netdlg_act (int act, const char *text);
 int port3ds_flight_ship (int *sx, int *sy, int *facing);
 extern volatile int port3ds_hs_facing;
 
+/* the instruction manual is open: the game waits in port3ds_game_frame */
+extern volatile int port3ds_manual_active;
+
 /* Stereo 3D: a depth per pixel of the main screen, set by tags in the draw
  * queue. Depth > 0 is behind the screen, < 0 in front of it. */
 void port3ds_depth_set (int depth);       /* game thread: tag what follows */

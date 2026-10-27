@@ -39,6 +39,15 @@ with stereo 3D, and the touch controls move below it.
 The swapped layout (game on top, 3D) keeps the full touch deck on the bottom
 screen: galaxy map, menu buttons, replies, Super Melee grid.
 
+## Instruction manual
+
+The manual is built into the game: MANUAL on the main menu, the ? button, or
+ZR. Its text reads on the top screen (pad to scroll, L / R between sections,
+B or Start to close); the touch screen has a button per section. The game
+waits while it is open. The text is `port3ds/manual.txt`, built in by
+`tools/embed_manual.py` on every build; a `manual.txt` in `sdmc:/3ds/uqm/`
+replaces it without a rebuild.
+
 | Button | Does |
 |---|---|
 | A | select / fire weapon |
@@ -48,7 +57,7 @@ screen: galaxy map, menu buttons, replies, Super Melee grid.
 | D-pad, Circle Pad, C-stick | move / steer |
 | L / R | page up/down, starmap zoom |
 | START / SELECT | pause / retreat (when allowed), cancel name |
-| ZL / ZR | swap screens / help |
+| ZL / ZR | swap screens / manual |
 
 The layout choice and FPS persist in `sdmc:/3ds/uqm/port3ds.cfg`. UQM's own
 Setup menu (music, speech, subtitles, melee zoom) works as on PC.

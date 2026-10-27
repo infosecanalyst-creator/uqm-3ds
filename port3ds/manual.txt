@@ -1,0 +1,200 @@
+# Welcome
+The year is 2155. Earth has been enslaved for twenty years by the Ur-Quan, and you command the only free human starship: the Vindicator, rebuilt from ancient Precursor technology.
+
+Your job is to find allies among the alien races, gather resources and build a fleet strong enough to set Earth free. How you do it is up to you.
+
+This is The Ur-Quan Masters, the open-source version of Star Control II, built for the New 3DS. The game runs pixel-for-pixel on the touch screen and you play it with the stylus. The top screen shows you what you need to know at a glance.
+
+## Reading this manual
+- Tap a section on the touch screen to open it.
+- Circle Pad or D-pad up and down: scroll.
+- L and R: previous and next section.
+- B, Start or ZR: close. The game waits while you read, and the manual opens again where you left it.
+
+# Getting started
+The Ur-Quan Masters runs on the New Nintendo 3DS and New 3DS XL.
+
+## Installing over Wi-Fi
+1. On the 3DS, start ftpd from the Homebrew Launcher.
+2. On the PC, run build-uqm.sh, then install-3ds.sh with the 3DS's IP address. The first time, add --uqm-data to send the game data (about 150 MB).
+3. Close ftpd and start The Ur-Quan Masters from the Homebrew Launcher.
+
+Every update after that is the same, without --uqm-data.
+
+## Game files
+- sdmc:/3ds/uqm/uqm.3dsx: the game.
+- sdmc:/3ds/uqm/content/packages: the game data, plus the 3DO voice and music packs.
+- sdmc:/3ds/dspfirm.cdc: the sound firmware every homebrew game needs (run DSP1 once).
+
+## The main menu
+| New Game | Start the adventure. You name your captain and ship.
+| Load Game | Pick a saved game.
+| Play Super Melee | Ship-against-ship battles, against the computer or a friend.
+| Setup | Music, speech, subtitles, menu style and more.
+| Quit | Back to the Homebrew Launcher.
+| Manual | This manual.
+
+Tap a choice, or use the D-pad and A.
+
+# The two screens
+## Touch screen: the game
+The game fills the touch screen and the stylus plays it.
+- Tap empty space and your ship flies there.
+- Hold the stylus down and the ship steers toward it.
+- Menus appear as big buttons over the game while they are open.
+- In Super Melee you tap the ship slots and buttons on the game itself.
+- In combat nothing covers the game: fight with the buttons.
+
+## Top screen: the dashboard
+You never need to touch it. While flying it shows the galaxy map around your ship, your fuel range, your fuel, money (RU), crew and landers, where you are, and the course you have set. In combat and menus it shows what each button does.
+
+## Swapping screens: ZL
+ZL puts the game on the top screen instead, with stereo 3D, and turns the touch screen into a control panel: galaxy map, menu buttons, replies and the Super Melee grid. Press ZL again to swap back. The game remembers your choice.
+
+# Controls
+| A | Select. In combat: fire.
+| B | Back. In flight: ship menu. In combat: special ability.
+| Y or Up | Thrust.
+| X | Special action in some menus.
+| Pad | D-pad, Circle Pad and C-stick: move, steer, turn.
+| L and R | Page up and down in lists, zoom the starmap.
+| START | Pause.
+| SELECT | In combat: retreat (when allowed). When typing: cancel. In flight: quit to the main menu (asks first).
+| ZL | Swap the two screens.
+| ZR | This manual.
+
+## Touch, while flying
+| Tap space | Fly to that spot. In HyperSpace: cruise in that direction.
+| Hold | Steer toward the stylus.
+| MENU | Open the ship menu.
+| MAP | The galaxy map, for setting a course.
+| II | Pause.
+| ? | This manual.
+| SWAP | Swap the screens, like ZL.
+
+Pressing any button or the pad takes control back from the stylus.
+
+# Flying
+## HyperSpace
+HyperSpace is the red void between the stars. Each star system appears as a glowing dot; fly into one to enter that system. Flying burns fuel, and running out of fuel in HyperSpace leaves you stranded, so keep an eye on the green ring on the dashboard map: it shows how far your fuel can take you.
+
+## Setting a course
+1. Tap MAP.
+2. Tap a star. Its name, distance and the fuel it takes appear on the right. FUEL turns red if you can't make it.
+3. Tap the same star again, or SET COURSE. The map closes and the autopilot flies you there.
+
+On the map, drag to pan, + and - zoom, SHIP centers on your ship. The course stays on the dashboard until you arrive or steer yourself.
+
+## Solar systems
+Inside a system you see the sun, the planets and their orbits. Fly into a planet to go into orbit around it; fly into its moons from there. Fly off the edge of the screen to leave the system for HyperSpace.
+
+## QuasiSpace
+Later in the game you may find a way into QuasiSpace, a green void with very different distances. There is no galaxy map there.
+
+# The ship menu
+Tap MENU (or press B) while flying. The ship menu appears as big buttons; the highlighted one is the game's current choice.
+| Starmap | The game's own starmap. The MAP tab is quicker.
+| Devices | Use alien devices you have found.
+| Cargo | Minerals, life data and fuel on board.
+| Roster | Your escort ships and their crew.
+| Game | Save, Load, Quit, Settings.
+| Navigate | Close the menu and keep flying.
+
+Some menu styles group Devices, Cargo and Roster under Manifest. The buttons work either way.
+
+## Saving
+Game, then Save Game, then pick a slot. Save often, especially before a fight or a long trip.
+
+# Planets
+## In orbit
+Orbiting a planet replaces the ship menu with the orbit menu: Scan, Starmap, Devices, Cargo, Roster, Game and Navigate. Navigate leaves orbit.
+
+## Scanning
+Scan shows the planet's surface and offers Mineral, Energy and Biological scans, Auto Scan (all three) and Dispatch Lander. Minerals show as colored dots, energy sources and life forms as their own markers.
+
+## The lander
+Dispatch Lander sends a lander down where the cursor points. On the surface:
+- Pad: steer. Y or Up: drive.
+- A: fire, to stun life forms so you can collect them.
+- Drive over minerals and stunned life to pick them up.
+- B: take off and return to your ship.
+
+Earthquakes, lightning and fire hurt the crew on board. A lander with no crew left is lost. Minerals are sold for RU at the starbase.
+
+# Talking to aliens
+When you meet a ship, choose Converse to talk or Attack to fight. Some aliens attack you anyway.
+
+During a conversation the alien speaks first. Your possible replies appear as big buttons along the bottom of the touch screen; tap one to say it.
+- While the alien talks: SKIP (or B) jumps to the end, REPLAY (or Left) repeats the last line, Right fast-forwards.
+- If there are more replies than fit, MORE REPLIES shows the rest.
+
+Listen carefully. Most of what you learn in this game, you learn by talking.
+
+# The starbase
+The starbase orbits Earth. Once it is yours you can:
+| Talk to the Commander | Advice, news and missions.
+| Outfit Starship | Buy fuel and modules for your flagship.
+| Shipyard | Hire crew and build escort ships.
+| Depart Starbase | Back to space.
+
+In Outfit and the Shipyard, Up adds and Down removes (fuel, crew), A confirms, B goes back. Money comes from selling minerals and from alien deals.
+
+# Ship combat
+Each ship has crew, energy and two abilities.
+- A: main weapon. B: special ability. Both use energy, which recharges on its own.
+- Y or Up: thrust. Pad: turn.
+- Crew is your hit points. When it reaches zero the ship is destroyed.
+- Planets pull you in with gravity, and asteroids hurt.
+- SELECT tries to retreat, when the fight allows it.
+
+In a story battle you pick which ship in your fleet fights next. Every ship plays very differently: try them all in Super Melee.
+
+# Super Melee
+Ship-against-ship battles with fleets you build.
+
+## Setting up
+- Tap a ship slot to change it: a list of all 25 ships with their point cost appears. Tap one, or EMPTY SLOT.
+- The buttons on the right of the game: Controls (Human, Weak, Good or Awesome computer), Save and Load a fleet, Battle!, Quit. Net appears for network play.
+- The dashboard lists both fleets with their points.
+
+## In battle
+Before each round, pick the ship to send in from your remaining ships, or RANDOM SHIP. The computer picks its own.
+
+# Netplay
+Super Melee over Wi-Fi against another 3DS running this port, or against The Ur-Quan Masters 0.8.0 on a PC.
+1. Both players open Super Melee. Each taps Net on the side the other player will control.
+2. One player taps WAIT FOR CONNECTION. Their 3DS's IP address is shown on screen.
+3. The other taps HOST, types that IP, then CONNECT TO HOST. The default port is 21837.
+4. Each player sets their own side to Human, then both tap Battle!.
+
+DELAY trades responsiveness for smoothness on a slow network. Both 3DS need to be on Wi-Fi.
+
+# Stereo 3D
+Stereo 3D works when the game is on the top screen (press ZL), in HyperSpace, solar systems, orbit and combat. The starfield sits deep behind the screen, the solar system sits behind your ship, and an orbiting planet floats in front. Ships, shots, text and the status panel stay at screen depth, so nothing you aim at is doubled. With the slider at zero nothing extra is drawn.
+
+# Settings and files
+## Settings
+Setup (main menu) changes music, speech, subtitles, the menu style (PC or 3DO) and melee zoom. Game, then Settings (ship menu) switches sound and music, sets how fast the computer fights, and renames your captain or ship.
+
+## Files on the SD card
+| sdmc:/3ds/uqm/save | Your saved games.
+| uqm.cfg | The game's settings.
+| port3ds.cfg | Which screen the game is on, and FPS.
+| uqm.log | Errors, for bug reports.
+| manual.txt | Replaces this manual (see the last section).
+
+# Troubleshooting
+## There is no sound
+Run DSP1 from the Homebrew Launcher once (it writes sdmc:/3ds/dspfirm.cdc), then restart the game.
+
+## It says the game data is missing
+Send the data from the PC: install-3ds.sh with the 3DS's IP and --uqm-data.
+
+## The stylus does nothing
+Tapping flies the ship only while you are flying with no menu open. In combat the buttons do everything.
+
+## The game crashed
+Look at sdmc:/3ds/uqm/uqm.log and send it with a note of what you were doing.
+
+## Changing this manual
+A file named manual.txt in sdmc:/3ds/uqm/ replaces the built-in text. A line starting with "# " starts a section, "## " a heading, "- " a list item, "1. " a numbered step, and "| a | b" a two-column table row. A blank line ends a paragraph.
