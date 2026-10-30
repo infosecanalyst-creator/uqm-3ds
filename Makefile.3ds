@@ -52,7 +52,7 @@ $(TARGET).elf: $(OBJS)
 	$(CC) $(LDFLAGS) $(OBJS) $(LIBS) -o $@
 
 $(TARGET).smdh: res/icon.png
-	smdhtool --create "The Ur-Quan Masters" "Star Control II, open source - New 3DS port" \
+	smdhtool --create "The Ur-Quan Masters" "Open-source space adventure - New 3DS port" \
 		"UQM team / 3DS port" $< $@
 
 $(TARGET).3dsx: $(TARGET).elf $(TARGET).smdh

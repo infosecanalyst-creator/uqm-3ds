@@ -3,7 +3,7 @@ The year is 2155. Earth has been enslaved for twenty years by the Ur-Quan, and y
 
 Your job is to find allies among the alien races, gather resources and build a fleet strong enough to set Earth free. How you do it is up to you.
 
-This is The Ur-Quan Masters, the open-source version of Star Control II, built for the New 3DS. The game runs pixel-for-pixel on the touch screen and you play it with the stylus. The top screen shows you what you need to know at a glance.
+This is The Ur-Quan Masters, the open-source release of the classic 1992 space adventure, built for the New 3DS. The game runs pixel-for-pixel on the touch screen and you play it with the stylus. The top screen shows you what you need to know at a glance.
 
 ## Reading this manual
 - Tap a section on the touch screen to open it.

@@ -1,4 +1,6 @@
-# The Ur-Quan Masters (Star Control II) for the New 3DS
+# The Ur-Quan Masters for the New 3DS
+
+*Not affiliated with or endorsed by Stardock, Toys for Bob or Nintendo. Star Control is a trademark of Stardock.*
 
 UQM 0.8.0 with a purpose-built 3DS platform layer. No emulation, no scaling:
 the game's native 320x240 frame is shown pixel-for-pixel.
@@ -6,14 +8,19 @@ the game's native 320x240 frame is shown pixel-for-pixel.
 ## Build and install (PC, devkitPro MSYS2)
 
 ```
-bash /c/devkitPro/3ds-projects/uqm-3ds/build-uqm.sh
-bash /c/devkitPro/3ds-projects/install-3ds.sh <3DS IP> --uqm-data   # first time: ~150 MB of game data
-bash /c/devkitPro/3ds-projects/install-3ds.sh <3DS IP> uqm          # the game (1.6 MB), every update
+bash build-uqm.sh
+./install-3ds.sh <3DS IP> --uqm-data   # first time: ~150 MB of game data
+./install-3ds.sh <3DS IP> uqm          # the game (1.6 MB), every update
 ```
+
+`build-uqm.sh` downloads the UQM source and the free UQM content packages
+from SourceForge and leaves the files to send in `../SD-CARD/3ds/uqm/`.
+`install-3ds.sh` sends them over FTP (needs `curl`; `UQM_SD` and `FTP_PORT`
+override the folder and port 5000).
 
 Open ftpd on the 3DS first (it shows the IP). Or skip installing a build and
 run it straight from the PC: hold Y in the Homebrew Launcher, then
-`3dslink -a <3DS IP> SD-CARD/3ds/uqm/uqm.3dsx`.
+`3dslink -a <3DS IP> ../SD-CARD/3ds/uqm/uqm.3dsx`.
 
 On the SD card: `sdmc:/3ds/uqm/uqm.3dsx`, data in `sdmc:/3ds/uqm/content/packages/`,
 saves in `sdmc:/3ds/uqm/save/`, errors in `sdmc:/3ds/uqm/uqm.log`.
@@ -111,9 +118,23 @@ side to HUMAN, then both tap BATTLE!.
 
 ## License
 
-The port code (`port3ds/`, `tools/`, `harness/`, build files) is GPL-2.0-or-later,
-the same licence as The Ur-Quan Masters code it patches (see `COPYING`). The UQM
-source and game content are not stored here: the build downloads them from the
-UQM project on SourceForge. UQM content is CC BY-NC-SA 2.5 (UQM team / Toys for
-Bob). The fonts in `port3ds/font_*.h` are generated from the public-domain X11
-misc-fixed fonts; the icon comes from UQM's own resources.
+- **Port code** (`port3ds/`, `tools/`, `harness/`, build files): GPL-2.0-or-later,
+  the same licence as The Ur-Quan Masters code it patches (see `COPYING`).
+- **UQM source**: not stored here; the build downloads UQM 0.8.0 from the UQM
+  project on SourceForge. It is GPL-2.0-or-later, (C) 1992, 2002 Toys for Bob, Inc.
+- **UQM content** (graphics, sound, music, voice: `uqm-0.8.0-content.uqm`,
+  `-voice.uqm`, `-3domusic.uqm`): not stored here; the build downloads it. It is
+  (C) 1992, 1993, 2002 Toys for Bob, Inc. or its respective creators, licensed
+  under [CC BY-NC-SA 2.5](https://creativecommons.org/licenses/by-nc-sa/2.5/)
+  (non-commercial). `build-uqm.sh` repacks the base pack uncompressed; the
+  content is otherwise unchanged.
+- **Icon** (`res/icon.png`): the Ur-Quan ship icon from UQM's own resources
+  (`src/res/ur-quan-icon*.ico`), by Toys for Bob, Inc. / The Ur-Quan Masters
+  team, converted to a 48x48 PNG. It is licensed under
+  [CC BY-NC-SA 2.5](https://creativecommons.org/licenses/by-nc-sa/2.5/), not GPL.
+- **Fonts** (`port3ds/font_*.h`): generated from the public-domain X11
+  misc-fixed fonts.
+
+The Ur-Quan Masters is a separate free project; this port is not made by the
+UQM team. Not affiliated with or endorsed by Stardock, Toys for Bob or
+Nintendo. Star Control is a trademark of Stardock.

@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # Build The Ur-Quan Masters for the New 3DS, inside devkitPro's MSYS2:
-#     bash /c/devkitPro/3ds-projects/uqm-3ds/build-uqm.sh
+#     bash build-uqm.sh
 # First run downloads the UQM 0.8.0 source and game data from SourceForge
 # (~150 MB, kept in downloads/). Every run re-applies the port's patches
 # (idempotent), rebuilds, and leaves:
 #     SD-CARD/3ds/uqm/uqm.3dsx                     (the only copy of the .3dsx)
 #     SD-CARD/3ds/uqm/content/packages/*.uqm       (game data, sent once)
-# Then on the PC:  bash /c/devkitPro/3ds-projects/install-3ds.sh <3DS IP> uqm
-# (first time also: ... install-3ds.sh <3DS IP> --uqm-data)
+# Then on the PC:  ./install-3ds.sh <3DS IP> uqm
+# (first time also: ./install-3ds.sh <3DS IP> --uqm-data)
 export DEVKITPRO=/opt/devkitpro DEVKITARM=/opt/devkitpro/devkitARM
 export PATH=$DEVKITARM/bin:$DEVKITPRO/tools/bin:$PATH
 HERE="$(cd "$(dirname "$0")" && pwd)"

@@ -5,7 +5,7 @@ static const char manual_builtin[] =
 	"\n"
 	"Your job is to find allies among the alien races, gather resources and build a fleet strong enough to set Earth free. How you do it is up to you.\n"
 	"\n"
-	"This is The Ur-Quan Masters, the open-source version of Star Control II, built for the New 3DS. The game runs pixel-for-pixel on the touch screen and you play it with the stylus. The top screen shows you what you need to know at a glance.\n"
+	"This is The Ur-Quan Masters, the open-source release of the classic 1992 space adventure, built for the New 3DS. The game runs pixel-for-pixel on the touch screen and you play it with the stylus. The top screen shows you what you need to know at a glance.\n"
 	"\n"
 	"## Reading this manual\n"
 	"- Tap a section on the touch screen to open it.\n"
