@@ -14,6 +14,7 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+static int home_pending = 0;
 #include <sys/syscall.h>
 
 /* ---- time ---- */
@@ -177,6 +178,7 @@ void hidScanInput (void)
 		else if (!strcmp (e->cmd, "untouch")) held &= ~KEY_TOUCH;
 		else if (!strcmp (e->cmd, "snap")) snap (e->arg);
 		else if (!strcmp (e->cmd, "quit")) quit = 1;
+		else if (!strcmp (e->cmd, "home")) home_pending = 1;
 	}
 	down_ = held & ~prev_held;
 	up_ = prev_held & ~held;
@@ -186,7 +188,27 @@ u32 hidKeysHeld (void) { return held; }
 u32 hidKeysUp (void) { return up_; }
 void hidCircleRead (circlePosition *p) { p->dx = p->dy = 0; }
 void hidTouchRead (touchPosition *p) { *p = touch; }
-bool aptMainLoop (void) { return !quit; }
+/* HOME button: "home" in the script suspends and restores the app (or is
+ * rejected while HOME is not allowed) */
+static aptHookCookie *hook_list;
+static int home_allowed = 1, home_rejected = 0;
+void aptHook (aptHookCookie *c, aptHookFn fn, void *p) { c->callback = fn; c->param = p; c->next = hook_list; hook_list = c; }
+void aptUnhook (aptHookCookie *c) { aptHookCookie **pp = &hook_list; while (*pp) { if (*pp == c) { *pp = c->next; break; } pp = &(*pp)->next; } }
+void aptSetHomeAllowed (bool a) { home_allowed = a; fprintf (stderr, "fake: HOME %s\n", a ? "allowed" : "blocked"); }
+void aptSetSleepAllowed (bool a) { (void) a; }
+bool aptCheckHomePressRejected (void) { int r = home_rejected; home_rejected = 0; return r; }
+void ndspExit (void) {}
+static void call_hooks (APT_HookType h) { aptHookCookie *c; for (c = hook_list; c; c = c->next) c->callback (h, c->param); }
+bool aptMainLoop (void)
+{
+	if (home_pending)
+	{
+		home_pending = 0;
+		if (!home_allowed) home_rejected = 1;
+		else { call_hooks (APTHOOK_ONSUSPEND); usleep (300000); call_hooks (APTHOOK_ONRESTORE); }
+	}
+	return !quit;
+}
 Result APT_CheckNew3DS (bool *out) { *out = true; return 0; }
 Result APT_SetAppCpuTimeLimit (u32 p) { (void) p; return 0; }
 

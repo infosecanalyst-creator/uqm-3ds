@@ -30,6 +30,7 @@
 #include <dirent.h>
 #include <math.h>
 #include <malloc.h>
+#include <unistd.h>
 #ifndef UQM3DS_HARNESS
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -379,6 +380,11 @@ static void relayout (void);
 static void toggle_layout (void);
 static void open_keyboard (void);
 static void set_backlight (int off);
+static void apt_events (void);
+static void close_now (void);
+static u64 home_note_until = 0;
+static volatile int apt_returned = 0;
+static void draw_home_note (void);
 
 /* ---- touch regions, rebuilt on every draw ---- */
 enum {
@@ -1398,6 +1404,15 @@ man_step (int d)
 }
 
 static void
+man_go (int i)
+{	/* D-pad on the 2-column section grid; stops at the edges */
+	if (i < 0 || i >= man_nsec || i == man_cur)
+		return;
+	man_cur = i;
+	deck_dirty = 1;
+}
+
+static void
 man_scroll_by (int d)
 {
 	const int max = man_nsec ? man_secs[man_cur].count - MAN_ROWS : 0;
@@ -1457,7 +1472,7 @@ draw_man_top (void)
 		fill (394, 28 + (195 - h) * top / max, 3, h, COL_ACCENT);
 	}
 	fill (0, 224, 400, 16, COL_HEADER);
-	text (6, 226, "Pad: scroll    L / R: section    B: close", COL_DIM, 0);
+	text (6, 226, "Stick: scroll    D-pad, L / R: section    B: close", COL_DIM, 0);
 }
 
 /* the choosing side: a button per section */
@@ -2139,6 +2154,7 @@ show_deck (void)
 	if (play_mode ())
 	{
 		draw_dashboard ();
+		draw_home_note ();
 		fb = (u32 *) gfxGetFramebuffer (GFX_TOP, GFX_LEFT, &fw, &fh);
 		blit_to_fb (fb, 0, deck_buf, 400, 400);
 		GSPGPU_FlushDataCache (fb, 400 * 240 * 4);
@@ -2162,6 +2178,7 @@ show_deck (void)
 	deck_px = deck_buf;
 	deck_w = (scr == GFX_TOP) ? 400 : 320;
 	draw_deck ();
+	draw_home_note ();
 	fb = (u32 *) gfxGetFramebuffer (scr, GFX_LEFT, &fw, &fh);
 	blit_to_fb (fb, 0, deck_px, deck_w, deck_w);
 	GSPGPU_FlushDataCache (fb, (u32) deck_w * 240 * 4);
@@ -2773,8 +2790,17 @@ port3ds_pump_input (void)
 	u32 kdown, kheld, kup, v, changed;
 	int i;
 
+	apt_events ();
 	if (!aptMainLoop ())
+	{
+		close_now ();
 		return 0;
+	}
+	if (apt_returned)
+	{	/* back from the HOME menu or sleep: redraw both screens */
+		apt_returned = 0;
+		relayout ();
+	}
 
 	hidScanInput ();
 	kdown = hidKeysDown ();
@@ -2798,27 +2824,44 @@ port3ds_pump_input (void)
 	v = read_virtual_keys (kheld);
 	if (help_page >= 0)
 	{	/* reading the manual: the buttons are its own, the game gets none */
-		static u32 last_v = 0;
+		/* the standard for all the 3DS ports: Circle Pad and C-stick scroll
+		 * (hold to keep going), the D-pad moves between the section buttons,
+		 * L/R previous/next section, B or START close */
+		static int last_sd = 0;
 		static u64 next_scroll = 0;
 		const u64 now = osGetTime ();
-		const u32 ud = v & ((1u << VK_UP) | (1u << VK_DOWN));
+		circlePosition cp;
+		int sd = 0;
+		hidCircleRead (&cp);
+		if (cp.dy > 48 || (kheld & KEY_CSTICK_UP))
+			sd = -1;
+		else if (cp.dy < -48 || (kheld & KEY_CSTICK_DOWN))
+			sd = 1;
 		if (kdown & (KEY_B | KEY_START))
 			man_close ();
 		else if (kdown & KEY_L)
 			man_step (-1);
 		else if (kdown & KEY_R)
 			man_step (1);
-		if (ud && (ud & ~last_v))
+		else if (kdown & KEY_DLEFT)
+			man_go (man_cur - 1);
+		else if (kdown & KEY_DRIGHT)
+			man_go (man_cur + 1);
+		else if (kdown & KEY_DUP)
+			man_go (man_cur - 2);
+		else if (kdown & KEY_DDOWN)
+			man_go (man_cur + 2);
+		if (sd && sd != last_sd)
 		{
-			man_scroll_by ((ud & (1u << VK_UP)) ? -1 : 1);
+			man_scroll_by (sd);
 			next_scroll = now + 300;
 		}
-		else if (ud && now >= next_scroll)
+		else if (sd && now >= next_scroll)
 		{
-			man_scroll_by ((ud & (1u << VK_UP)) ? -1 : 1);
+			man_scroll_by (sd);
 			next_scroll = now + 60;
 		}
-		last_v = v;
+		last_sd = sd;
 		v = 0;
 		steer_stop ();
 	}
@@ -3083,21 +3126,133 @@ write_defaults (void)
 	}
 }
 
-/* sockets for Super Melee netplay (1 MB, page-aligned, owned by soc:u) */
+/* sockets for Super Melee netplay (1 MB, page-aligned, owned by soc:u).
+ * The socket service has to be shut down before the HOME menu, sleep or
+ * closing the game, or the system hangs on black screens; it is started
+ * again on return.  The buffer is kept for the whole run. */
 static u32 *soc_buf = NULL;
+static int soc_on = 0;
 static char local_ip[32] = "";
+
+static void
+net_start (void)
+{
+#ifndef UQM3DS_HARNESS
+	if (soc_on)
+		return;
+	if (!soc_buf)
+		soc_buf = (u32 *) memalign (0x1000, 0x100000);
+	if (soc_buf && R_SUCCEEDED (socInit (soc_buf, 0x100000)))
+		soc_on = 1;
+#endif
+}
+
+static void
+net_stop (void)
+{
+#ifndef UQM3DS_HARNESS
+	if (soc_on)
+	{
+		socExit ();
+		soc_on = 0;
+	}
+#endif
+}
 
 static void
 net_init (void)
 {
-#ifndef UQM3DS_HARNESS
-	soc_buf = (u32 *) memalign (0x1000, 0x100000);
-	if (soc_buf && R_FAILED (socInit (soc_buf, 0x100000)))
+	net_start ();
+}
+
+/* ---- HOME menu, sleep and closing from the HOME menu ---- */
+static aptHookCookie apt_cookie;
+static int home_blocked = 0;
+
+static void
+apt_log (const char *what)
+{
+	fprintf (stderr, "port3ds: %s\n", what);
+	fflush (stderr);
+}
+
+static void
+apt_hook (APT_HookType hook, void *param)
+{
+	(void) param;
+	switch (hook)
 	{
-		free (soc_buf);
-		soc_buf = NULL;
+		case APTHOOK_ONSUSPEND:
+		case APTHOOK_ONSLEEP:
+			apt_log (hook == APTHOOK_ONSUSPEND ? "to HOME menu" : "to sleep");
+			net_stop ();
+			if (backlight_off && lcd_ok)
+				GSPLCD_PowerOnBacklight (GSPLCD_SCREEN_BOTTOM);
+			backlight_off = 0;
+			break;
+		case APTHOOK_ONRESTORE:
+		case APTHOOK_ONWAKEUP:
+			apt_log (hook == APTHOOK_ONRESTORE ? "back from HOME menu" : "awake");
+			net_start ();
+			apt_returned = 1;
+			break;
+		default:
+			break;
 	}
+}
+
+/* called on the main thread before each aptMainLoop () */
+static void
+apt_events (void)
+{
+	const int live = port3ds_net_live ();
+	if (live != home_blocked)
+	{	/* a netplay connection would be cut: HOME and sleep wait for it */
+		home_blocked = live;
+		aptSetHomeAllowed (!live);
+		aptSetSleepAllowed (!live);
+	}
+	if (live && aptCheckHomePressRejected ())
+	{
+		home_note_until = osGetTime () + 3000;
+		deck_dirty = 1;
+	}
+	if (home_note_until && osGetTime () > home_note_until)
+	{
+		home_note_until = 0;
+		deck_dirty = 1;
+	}
+}
+
+/* Close was chosen in the HOME menu: the system waits for the process to
+ * end, so shut the services down and leave now.  The game's own shutdown
+ * waits on its threads and could hang the console. */
+static void
+close_now (void)
+{
+	static int once = 0;
+	if (!once++)
+		apt_log ("closed from the HOME menu");
+#ifndef UQM3DS_HARNESS
+	net_stop ();
+	ndspExit ();
+	if (lcd_ok)
+		gspLcdExit ();
+	gfxExit ();
+	_exit (0);
 #endif
+}
+
+static void
+draw_home_note (void)
+{
+	static const char msg[] = "HOME and sleep are off while a side is set to Net.";
+	int x;
+	if (!home_note_until)
+		return;
+	x = (deck_w - text_w (msg, 0)) / 2;
+	fill (0, DECK_H - 20, deck_w, 20, COL_HOT);
+	text (x < 2 ? 2 : x, DECK_H - 17, msg, COL_HOT_TEXT, 0);
 }
 
 static const char *
@@ -3143,6 +3298,7 @@ port3ds_init (void)
 
 	comm_lock = SDL_CreateMutex ();
 	net_init ();
+	aptHook (&apt_cookie, apt_hook, NULL);
 	stat_second_start = osGetTime ();
 	relayout ();
 }
@@ -3154,12 +3310,8 @@ port3ds_exit (void)
 	if (lcd_ok)
 		gspLcdExit ();
 #ifndef UQM3DS_HARNESS
-	if (soc_buf)
-	{
-		socExit ();
-		free (soc_buf);
-		soc_buf = NULL;
-	}
+	aptUnhook (&apt_cookie);
+	net_stop ();
 #endif
 	gfxExit ();
 }

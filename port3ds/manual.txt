@@ -7,7 +7,8 @@ This is The Ur-Quan Masters, the open-source release of the classic 1992 space a
 
 ## Reading this manual
 - Tap a section on the touch screen to open it.
-- Circle Pad or D-pad up and down: scroll.
+- Circle Pad or C-stick: scroll. Hold to keep scrolling.
+- D-pad: move between the section buttons.
 - L and R: previous and next section.
 - B, Start or ZR: close. The game waits while you read, and the manual opens again where you left it.
 
@@ -169,6 +170,8 @@ Super Melee over Wi-Fi against another 3DS running this port, or against The Ur-
 
 DELAY trades responsiveness for smoothness on a slow network. Both 3DS need to be on Wi-Fi.
 
+While a side is set to Net, the HOME button and closing the lid do nothing, because either would cut the connection. Set the side back to Human or a computer player to use them again.
+
 # Stereo 3D
 Stereo 3D works when the game is on the top screen (press ZL), in HyperSpace, solar systems, orbit and combat. The starfield sits deep behind the screen, the solar system sits behind your ship, and an orbiting planet floats in front. Ships, shots, text and the status panel stay at screen depth, so nothing you aim at is doubled. With the slider at zero nothing extra is drawn.
 
@@ -192,6 +195,9 @@ Send the data from the PC: install-3ds.sh with the 3DS's IP and --uqm-data.
 
 ## The stylus does nothing
 Tapping flies the ship only while you are flying with no menu open. In combat the buttons do everything.
+
+## HOME does nothing in Super Melee
+A side is set to Net. Set it to Human or a computer player first (see Netplay).
 
 ## The game crashed
 Look at sdmc:/3ds/uqm/uqm.log and send it with a note of what you were doing.

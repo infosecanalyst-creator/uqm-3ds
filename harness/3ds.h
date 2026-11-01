@@ -58,6 +58,16 @@ void osSetSpeedupEnable (bool on);
 u64 osGetTime (void);
 u64 svcGetSystemTick (void);
 bool aptMainLoop (void);
+typedef enum { APTHOOK_ONSUSPEND = 0, APTHOOK_ONRESTORE, APTHOOK_ONSLEEP, APTHOOK_ONWAKEUP,
+	APTHOOK_ONEXIT, APTHOOK_COUNT } APT_HookType;
+typedef void (*aptHookFn) (APT_HookType hook, void *param);
+typedef struct tag_aptHookCookie { struct tag_aptHookCookie *next; aptHookFn callback; void *param; } aptHookCookie;
+void aptHook (aptHookCookie *cookie, aptHookFn callback, void *param);
+void aptUnhook (aptHookCookie *cookie);
+void aptSetHomeAllowed (bool allowed);
+void aptSetSleepAllowed (bool allowed);
+bool aptCheckHomePressRejected (void);
+void ndspExit (void);
 Result APT_CheckNew3DS (bool *out);
 Result APT_SetAppCpuTimeLimit (u32 percent);
 

@@ -24,6 +24,9 @@
 #include "uqm/supermelee/melee.h"
 #include "uqm/supermelee/meleesetup.h"
 #include "uqm/supermelee/meleeship.h"
+#ifdef NETPLAY
+#include "uqm/supermelee/netplay/netmelee.h"
+#endif
 #include "uqm/races.h"
 #include "uqm/units.h"
 #include "libs/graphics/tfb_draw.h"
@@ -292,10 +295,31 @@ add_pm (MenuSnap *m, BYTE base, BYTE pm)
 	add_item (m, pm - base + (base == PM_STARMAP ? 1 : 0), s);
 }
 
+/* Super Melee is on screen (or one of its battles), set by the melee hook,
+ * cleared at the main menu */
+static volatile int in_melee = 0;
+
+/* a Super Melee side is set to Net: sockets may be open on the game thread,
+ * so the HOME menu and sleep must wait */
+int
+port3ds_net_live (void)
+{
+	if (!in_melee)
+		return 0;
+#ifdef NETPLAY
+	/* waiting for or making a connection, or connected */
+	if (netConnections[0] || netConnections[1])
+		return 1;
+#endif
+	return ((PlayerControl[0] | PlayerControl[1]) & NETWORK_CONTROL) ? 1 : 0;
+}
+
 void
 port3ds_menu_seen (int base, void *pms, int cur)
 {
 	MenuSnap *m = &msnap[msnap_cur ^ 1];
+	if (base == P3M_MAIN)
+		in_melee = 0;         /* back at the main menu: Super Melee is over */
 	m->base = base;
 	m->cur = cur;
 	m->n = 0;
@@ -411,6 +435,7 @@ port3ds_melee_take (void *pms, int *a, int *b, int *c)
 	Port3DSMelee *m = &mel[mel_cur ^ 1];
 	int side, i, act;
 
+	in_melee = 1;
 	if (!ship_cost[0])
 		for (i = 0; i < NUM_MELEE_SHIPS; ++i)
 			ship_cost[i] = GetShipValue ((MeleeShip) i);
