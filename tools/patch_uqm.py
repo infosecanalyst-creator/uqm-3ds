@@ -421,4 +421,14 @@ rw("uqm/ships/sis_ship/sis_ship.c",
    "#ifdef __3DS__\n\tport3ds_hs_facing = StarShipPtr->ShipFacing;\n#endif\n",
    "port3ds_hs_facing = StarShipPtr->ShipFacing;")
 
+# "really quit?": tap QUIT TO MAIN MENU / KEEP PLAYING on the touch screen
+rw("uqm/confirm.c",
+   "\t\t\tUpdateInputState ();\n\t\t\tif (GLOBAL (CurrentActivity) & CHECK_ABORT)\n",
+   "\t\t\tUpdateInputState ();\n#ifdef __3DS__\n\t\t\t{\n\t\t\t\tconst int p3 = port3ds_confirm_frame (response);\n"
+   "\t\t\t\tif (p3)\n\t\t\t\t{\n\t\t\t\t\tresponse = (p3 == 1);\n\t\t\t\t\tbreak;\n\t\t\t\t}\n\t\t\t}\n#endif\n"
+   "\t\t\tif (GLOBAL (CurrentActivity) & CHECK_ABORT)\n",
+   "port3ds_confirm_frame (response)")
+rw("uqm/confirm.c", '#include "controls.h"\n', '#include "controls.h"\n#ifdef __3DS__\n#\tinclude "port3ds.h"\n#endif\n',
+   '#\tinclude "port3ds.h"')
+
 print(f"patch_uqm: {applied} edits applied, {skipped} already present")

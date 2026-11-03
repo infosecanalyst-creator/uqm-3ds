@@ -148,6 +148,12 @@ extern volatile int port3ds_hs_facing;
 /* the instruction manual is open: the game waits in port3ds_game_frame */
 extern volatile int port3ds_manual_active;
 int port3ds_net_live (void);
+int port3ds_in_melee (void);
+/* "really quit?": the game thread reports its answer each frame and takes a
+ * tap (1 quit, 2 keep playing) */
+int port3ds_confirm_frame (int response);
+int port3ds_confirm_read (int *response);
+void port3ds_confirm_act (int act);
 
 /* Stereo 3D: a depth per pixel of the main screen, set by tags in the draw
  * queue. Depth > 0 is behind the screen, < 0 in front of it. */

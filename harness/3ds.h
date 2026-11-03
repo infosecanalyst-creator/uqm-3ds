@@ -67,6 +67,7 @@ void aptUnhook (aptHookCookie *cookie);
 void aptSetHomeAllowed (bool allowed);
 void aptSetSleepAllowed (bool allowed);
 bool aptCheckHomePressRejected (void);
+bool aptShouldJumpToHome (void);
 void ndspExit (void);
 Result APT_CheckNew3DS (bool *out);
 Result APT_SetAppCpuTimeLimit (u32 percent);

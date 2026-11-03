@@ -299,6 +299,12 @@ add_pm (MenuSnap *m, BYTE base, BYTE pm)
  * cleared at the main menu */
 static volatile int in_melee = 0;
 
+int
+port3ds_in_melee (void)
+{
+	return in_melee;
+}
+
 /* a Super Melee side is set to Net: sockets may be open on the game thread,
  * so the HOME menu and sleep must wait */
 int
@@ -686,4 +692,34 @@ port3ds_flight_ship (int *sx, int *sy, int *facing)
 		return 1;
 	}
 	return 0;
+}
+
+/* ---- the "really quit?" window (DoConfirmExit, game thread) ---- */
+static volatile int cf_act = 0, cf_resp = 0;
+static volatile DWORD cf_seen = 0;
+
+int
+port3ds_confirm_frame (int response)
+{
+	int act;
+	cf_resp = response;
+	cf_seen = GetTimeCounter ();
+	act = cf_act;
+	cf_act = 0;
+	return act;
+}
+
+int
+port3ds_confirm_read (int *response)
+{
+	if (!cf_seen || GetTimeCounter () - cf_seen > ONE_SECOND * 3 / 10)
+		return 0;
+	*response = cf_resp;
+	return 1;
+}
+
+void
+port3ds_confirm_act (int act)
+{
+	cf_act = act;     /* one slot: the newest tap replaces an older one */
 }

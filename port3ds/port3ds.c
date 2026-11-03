@@ -385,6 +385,7 @@ static void close_now (void);
 static u64 home_note_until = 0;
 static volatile int apt_returned = 0;
 static void draw_home_note (void);
+static void draw_confirm (int ox);
 
 /* ---- touch regions, rebuilt on every draw ---- */
 enum {
@@ -393,7 +394,7 @@ enum {
 	ACT_REPLY, ACT_REPLY_MORE, ACT_SKIP, ACT_REPLAY,
 	ACT_MAP, ACT_GO, ACT_ZOOM_IN, ACT_ZOOM_OUT, ACT_SHIP, ACT_SHORTCUT,
 	ACT_MENU, ACT_PICK, ACT_NET, ACT_GAME, ACT_TAB_MENU, ACT_TAB_MAP, ACT_MAP_CLOSE,
-	ACT_MELEE_OPT, ACT_MELEE_SLOT, ACT_MELEE_SHIP, ACT_MELEE_CANCEL
+	ACT_MELEE_OPT, ACT_MELEE_SLOT, ACT_MELEE_SHIP, ACT_MELEE_CANCEL, ACT_CONFIRM
 };
 typedef struct { short x, y, w, h; short act, arg; } Region;
 static Region regions[64];
@@ -795,16 +796,17 @@ static const Legend legend_menu[] = {
 	{"X", "Special"}, {"START", "Pause"}, {NULL, NULL} };
 static const Legend legend_combat[] = {
 	{"A", "Fire weapon"}, {"B", "Special"}, {"Y / UP", "Thrust"},
-	{"PAD", "Turn"}, {"SELECT", "Retreat"}, {"START", "Pause"}, {NULL, NULL} };
+	{"PAD", "Turn"}, {"SELECT", "Retreat"}, {"START", "Pause"},
+	{"HOLD SELECT", "Quit"}, {NULL, NULL} };
 static const Legend legend_flight[] = {
 	{"PAD", "Steer"}, {"Y / UP", "Thrust"}, {"B", "Ship menu"},
-	{"A", "Select"}, {"START", "Pause"}, {NULL, NULL} };
+	{"A", "Select"}, {"START", "Pause"}, {"HOLD SELECT", "Quit"}, {NULL, NULL} };
 static const Legend legend_talk[] = {
 	{"B", "Skip speech"}, {"RIGHT", "Fast-forward"}, {"LEFT", "Replay line"},
-	{"START", "Pause"}, {NULL, NULL} };
+	{"START", "Pause"}, {"HOLD SELECT", "Quit"}, {NULL, NULL} };
 static const Legend legend_starbase[] = {
 	{"PAD", "Move"}, {"A", "Select"}, {"B", "Back"}, {"UP/DOWN", "Buy / sell"},
-	{"START", "Pause"}, {NULL, NULL} };
+	{"START", "Pause"}, {"HOLD SELECT", "Quit"}, {NULL, NULL} };
 static const Legend legend_text[] = {
 	{"UP/DOWN", "Pick letter"}, {"LEFT/RIGHT", "Move"},
 	{"A", "Done"}, {"SELECT", "Cancel"}, {NULL, NULL} };
@@ -827,7 +829,8 @@ draw_legend_list (int ox, const Legend *lg, int y0)
 
 /* ---- the deck ---- */
 enum { MODE_LEGEND, MODE_NAV, MODE_REPLIES, MODE_TALK, MODE_TEXT, MODE_HELP,
-	MODE_MENU, MODE_MELEE, MODE_PICK, MODE_NET };
+	MODE_MENU, MODE_MELEE, MODE_PICK, MODE_NET, MODE_CONFIRM };
+static int confirm_on = 0, confirm_resp = 0;
 static Port3DSNetDlg netdlg;
 static int netdlg_on = 0;
 static unsigned char pick_ships[2][14];
@@ -846,6 +849,8 @@ deck_mode (void)
 {
 	if (help_page >= 0)
 		return MODE_HELP;
+	if (confirm_on)
+		return MODE_CONFIRM;
 	if (char_mode)
 		return MODE_TEXT;
 	if (netdlg_on)
@@ -871,6 +876,7 @@ mode_title (int mode)
 	switch (mode)
 	{
 		case MODE_HELP: return "MANUAL";
+		case MODE_CONFIRM: return "QUIT";
 		case MODE_TEXT: return "ENTER A NAME";
 		case MODE_REPLIES: return "YOUR REPLY";
 		case MODE_TALK: return "ENCOUNTER";
@@ -1512,6 +1518,9 @@ draw_deck (void)
 		case MODE_HELP:
 			draw_help (ox);
 			break;
+		case MODE_CONFIRM:
+			draw_confirm (ox);
+			break;
 		case MODE_TEXT:
 			draw_legend_list (ox, legend_text, 32);
 			button (ox + 30, 120, 260, 56, "OPEN KEYBOARD", ACT_KEYBOARD, 0, 1, 0, 1);
@@ -1786,6 +1795,20 @@ draw_dashboard (void)
 
 /* ---- overlay (bottom, over the game) ---- */
 
+/* the game's "really quit?" window, as two big buttons (ox: left edge) */
+static void
+draw_confirm (int ox)
+{
+	const int mel = port3ds_in_melee ();
+	const char *q = mel ? "End this battle?" : "Quit to the main menu?";
+	const char *n1 = mel ? "Back to the Super Melee screen." : "Anything not saved is lost.";
+	text (ox + (320 - text_w (q, 1)) / 2, 50, q, COL_TEXT, 1);
+	text (ox + (320 - text_w (n1, 0)) / 2, 72, n1, COL_DIM, 0);
+	button (ox + 20, 100, 280, 50, mel ? "END BATTLE" : "QUIT TO MAIN MENU", ACT_CONFIRM, 1,
+			confirm_resp, 0, 1);
+	button (ox + 20, 162, 280, 50, "KEEP PLAYING", ACT_CONFIRM, 2, !confirm_resp, 0, 1);
+}
+
 static void
 ovl_page (const char *title, int close_act)
 {	/* a full-screen page that covers the game */
@@ -1902,6 +1925,10 @@ draw_overlay (void)
 		case MODE_HELP:
 			ovl_page ("MANUAL", 0);
 			draw_man_buttons (0);
+			break;
+		case MODE_CONFIRM:
+			ovl_page ("QUIT", 0);
+			draw_confirm (0);
 			break;
 		case MODE_TEXT:
 			button (40, 96, 240, 48, "OPEN KEYBOARD", ACT_KEYBOARD, 0, 1, 0, 1);
@@ -2692,6 +2719,7 @@ do_action (int act, int arg, int px, int py)
 			melee_pick_side = melee_pick_slot = -1;
 			break;
 		case ACT_MELEE_CANCEL: melee_pick_side = melee_pick_slot = -1; break;
+		case ACT_CONFIRM: port3ds_confirm_act (arg); break;
 	}
 	deck_dirty = 1;
 }
@@ -2819,6 +2847,34 @@ port3ds_pump_input (void)
 	}
 
 	handle_touch (kdown, kheld, kup);
+
+	/* hold SELECT: the game's "quit to the main menu?" window (key F10) */
+	{
+		static u64 sel_since = 0, f10_up_at = 0;
+		static int sel_fired = 0;
+		const u64 now = osGetTime ();
+		if ((kheld & KEY_SELECT) && help_page < 0 && !confirm_on && deck_ctx != CTX3DS_MENU)
+		{
+			if (!sel_since)
+				sel_since = now;
+			else if (!sel_fired && now - sel_since >= 800)
+			{
+				sel_fired = 1;
+				send_key (SDLK_F10, 1);
+				f10_up_at = now + 100;
+			}
+		}
+		else
+		{
+			sel_since = 0;
+			sel_fired = 0;
+		}
+		if (f10_up_at && now >= f10_up_at)
+		{
+			send_key (SDLK_F10, 0);
+			f10_up_at = 0;
+		}
+	}
 
 	/* buttons -> keys */
 	v = read_virtual_keys (kheld);
@@ -2955,6 +3011,14 @@ port3ds_pump_input (void)
 		static u32 last_sig = 0;
 		u32 sig = 0;
 		netdlg_on = port3ds_netdlg_read (&netdlg);
+		{
+			int r = 0;
+			const int on = port3ds_confirm_read (&r);
+			if (on != confirm_on || (on && r != confirm_resp))
+				deck_dirty = 1;
+			confirm_on = on;
+			confirm_resp = r;
+		}
 		if (netdlg_on)
 		{
 			const char *p;
@@ -3205,7 +3269,12 @@ apt_hook (APT_HookType hook, void *param)
 static void
 apt_events (void)
 {
+	static int home_seen = 0;
 	const int live = port3ds_net_live ();
+	const int jump = aptShouldJumpToHome ();
+	if (jump && !home_seen)
+		apt_log ("HOME pressed");
+	home_seen = jump;
 	if (live != home_blocked)
 	{	/* a netplay connection would be cut: HOME and sleep wait for it */
 		home_blocked = live;

@@ -198,6 +198,7 @@ void aptSetHomeAllowed (bool a) { home_allowed = a; fprintf (stderr, "fake: HOME
 void aptSetSleepAllowed (bool a) { (void) a; }
 bool aptCheckHomePressRejected (void) { int r = home_rejected; home_rejected = 0; return r; }
 void ndspExit (void) {}
+bool aptShouldJumpToHome (void) { return home_pending && home_allowed; }
 static void call_hooks (APT_HookType h) { aptHookCookie *c; for (c = hook_list; c; c = c->next) c->callback (h, c->param); }
 bool aptMainLoop (void)
 {

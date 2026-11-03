@@ -60,7 +60,8 @@ ZL puts the game on the top screen instead, with stereo 3D, and turns the touch 
 | Pad | D-pad, Circle Pad and C-stick: move, steer, turn.
 | L and R | Page up and down in lists, zoom the starmap.
 | START | Pause.
-| SELECT | In combat: retreat (when allowed). When typing: cancel. In flight: quit to the main menu (asks first).
+| SELECT | In combat: retreat (when allowed). When typing: cancel.
+| Hold SELECT | Quit: ends a Super Melee battle, or leaves the game for the main menu. Asks first, with big buttons on the touch screen.
 | ZL | Swap the two screens.
 | ZR | This manual.
 
@@ -160,6 +161,8 @@ Ship-against-ship battles with fleets you build.
 
 ## In battle
 Before each round, pick the ship to send in from your remaining ships, or RANDOM SHIP. The computer picks its own.
+
+To stop a battle early, hold SELECT and tap END BATTLE. Quit on the Super Melee screen goes back to the main menu.
 
 # Netplay
 Super Melee over Wi-Fi against another 3DS running this port, or against The Ur-Quan Masters 0.8.0 on a PC.
