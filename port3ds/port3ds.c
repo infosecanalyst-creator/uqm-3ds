@@ -1141,7 +1141,10 @@ draw_melee (int ox)
 	if (melee.net)
 	{
 		char buf[64];
-		snprintf (buf, sizeof buf, "Tap a slot to change it.  This 3DS: %s", net_local_ip ());
+		if (port3ds_net_on ())
+			snprintf (buf, sizeof buf, "Tap a slot to change it.  This 3DS: %s", net_local_ip ());
+		else
+			snprintf (buf, sizeof buf, "Tap a slot to change it.");
 		text_center (0, 228, deck_w, buf, COL_DIM, 0);
 	}
 	else
@@ -3190,6 +3193,13 @@ write_defaults (void)
 	}
 }
 
+static void
+apt_log (const char *what)
+{
+	fprintf (stderr, "port3ds: %s\n", what);
+	fflush (stderr);
+}
+
 /* sockets for Super Melee netplay (1 MB, page-aligned, owned by soc:u).
  * The socket service has to be shut down before the HOME menu, sleep or
  * closing the game, or the system hangs on black screens; it is started
@@ -3223,22 +3233,38 @@ net_stop (void)
 #endif
 }
 
-static void
-net_init (void)
+/* Sockets are opened only when the player opens the netplay dialog and
+ * closed again at the main menu, both on the game thread (the thread that
+ * uses them).  Left open, the socket service hangs the HOME menu. */
+void
+port3ds_net_start (void)
 {
+	static u64 last_try = 0;
+	if (soc_on || (last_try && osGetTime () - last_try < 2000))
+		return;            /* no Wi-Fi: retry every 2 s, not every frame */
+	last_try = osGetTime ();
 	net_start ();
+	apt_log (soc_on ? "sockets on" : "sockets: no Wi-Fi");
+}
+
+void
+port3ds_net_stop (void)
+{
+	if (soc_on)
+		apt_log ("sockets off");
+	net_stop ();
+}
+
+int
+port3ds_net_on (void)
+{
+	return soc_on;
 }
 
 /* ---- HOME menu, sleep and closing from the HOME menu ---- */
 static aptHookCookie apt_cookie;
 static int home_blocked = 0;
-
-static void
-apt_log (const char *what)
-{
-	fprintf (stderr, "port3ds: %s\n", what);
-	fflush (stderr);
-}
+static int soc_resume = 0;
 
 static void
 apt_hook (APT_HookType hook, void *param)
@@ -3249,6 +3275,7 @@ apt_hook (APT_HookType hook, void *param)
 		case APTHOOK_ONSUSPEND:
 		case APTHOOK_ONSLEEP:
 			apt_log (hook == APTHOOK_ONSUSPEND ? "to HOME menu" : "to sleep");
+			soc_resume = soc_on;
 			net_stop ();
 			if (backlight_off && lcd_ok)
 				GSPLCD_PowerOnBacklight (GSPLCD_SCREEN_BOTTOM);
@@ -3257,7 +3284,9 @@ apt_hook (APT_HookType hook, void *param)
 		case APTHOOK_ONRESTORE:
 		case APTHOOK_ONWAKEUP:
 			apt_log (hook == APTHOOK_ONRESTORE ? "back from HOME menu" : "awake");
-			net_start ();
+			if (soc_resume)
+				net_start ();
+			soc_resume = 0;
 			apt_returned = 1;
 			break;
 		default:
@@ -3328,8 +3357,10 @@ static const char *
 net_local_ip (void)
 {
 #ifndef UQM3DS_HARNESS
-	if (soc_buf)
-	{
+	if (!soc_on)
+		local_ip[0] = 0;
+	else if (!local_ip[0])
+	{	/* asked once per session, not on every redraw */
 		struct in_addr a;
 		a.s_addr = (in_addr_t) gethostid ();
 		if (a.s_addr && a.s_addr != INADDR_NONE)
@@ -3366,7 +3397,6 @@ port3ds_init (void)
 	load_port_settings ();
 
 	comm_lock = SDL_CreateMutex ();
-	net_init ();
 	aptHook (&apt_cookie, apt_hook, NULL);
 	stat_second_start = osGetTime ();
 	relayout ();

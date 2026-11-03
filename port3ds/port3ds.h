@@ -149,6 +149,9 @@ extern volatile int port3ds_hs_facing;
 extern volatile int port3ds_manual_active;
 int port3ds_net_live (void);
 int port3ds_in_melee (void);
+void port3ds_net_start (void);
+void port3ds_net_stop (void);
+int port3ds_net_on (void);
 /* "really quit?": the game thread reports its answer each frame and takes a
  * tap (1 quit, 2 keep playing) */
 int port3ds_confirm_frame (int response);

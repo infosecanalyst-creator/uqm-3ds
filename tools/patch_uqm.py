@@ -431,4 +431,15 @@ rw("uqm/confirm.c",
 rw("uqm/confirm.c", '#include "controls.h"\n', '#include "controls.h"\n#ifdef __3DS__\n#\tinclude "port3ds.h"\n#endif\n',
    '#\tinclude "port3ds.h"')
 
+# select() with no descriptors fails on libctru (EINVAL) and was logged every
+# frame in Super Melee; with nothing to watch, just wait out the timeout
+rw("libs/network/netmanager/netmanager_bsd.c",
+   "\tdo {\n\t\tselectResult = select(NDIndex_getSelectNumND(),\n",
+   "#ifdef __3DS__\n\tif (NDIndex_getSelectNumND() == 0) {\n\t\tif (*timeoutMs)\n\t\t\tusleep(*timeoutMs * 1000);\n"
+   "\t\t*timeoutMs = 0;\n\t\treturn 0;\n\t}\n#endif\n"
+   "\tdo {\n\t\tselectResult = select(NDIndex_getSelectNumND(),\n",
+   "if (NDIndex_getSelectNumND() == 0)")
+rw("libs/network/netmanager/netmanager_bsd.c", '#include "netmanager_bsd.h"\n',
+   '#include "netmanager_bsd.h"\n#ifdef __3DS__\n#\tinclude <unistd.h>\t/* usleep */\n#endif\n', "/* usleep */")
+
 print(f"patch_uqm: {applied} edits applied, {skipped} already present")

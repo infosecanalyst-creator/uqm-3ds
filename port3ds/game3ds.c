@@ -325,7 +325,10 @@ port3ds_menu_seen (int base, void *pms, int cur)
 {
 	MenuSnap *m = &msnap[msnap_cur ^ 1];
 	if (base == P3M_MAIN)
+	{
 		in_melee = 0;         /* back at the main menu: Super Melee is over */
+		port3ds_net_stop ();  /* and its sockets, if netplay was opened */
+	}
 	m->base = base;
 	m->cur = cur;
 	m->n = 0;
@@ -636,6 +639,7 @@ port3ds_netdlg_frame (const char *host, const char *port, int delay, int side,
 {
 	Port3DSNetDlg *d = &nd[nd_cur ^ 1];
 	int act;
+	port3ds_net_start ();     /* the netplay dialog is open: sockets on */
 	snprintf (d->host, sizeof d->host, "%s", host);
 	snprintf (d->port, sizeof d->port, "%s", port);
 	d->delay = delay;
