@@ -39,7 +39,7 @@ rw("uqm.c",
    '#\tinclude "port3ds.h"')
 rw("uqm.c",
    "main (int argc, char *argv[])\n{\n\tstruct options_struct options = {\n",
-   "main (int argc, char *argv[])\n{\n#ifdef __3DS__\n\t/* registered before any of UQM's own atexit() handlers, so it is\n\t * also the last thing to run on exit */\n\tport3ds_init ();\n\tatexit (port3ds_exit);\n\t/* the launcher (and emulators) may pass extra arguments; UQM would reject them */\n\targc = 1;\n#endif\n\tstruct options_struct options = {\n",
+   "main (int argc, char *argv[])\n{\n#ifdef __3DS__\n\t/* registered before any of UQM's own atexit() handlers, so it is\n\t * also the last thing to run on exit */\n\tport3ds_init ();\n\tatexit (port3ds_exit);\n\t/* the launcher (and emulators) may pass extra arguments; UQM would reject them */\n\targc = 0;\n#endif\n\tstruct options_struct options = {\n",
    "port3ds_init ();")
 
 # ---- sdl1_common.c: SDL without its video driver -----------------------------
