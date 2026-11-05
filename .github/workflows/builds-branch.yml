@@ -1,0 +1,41 @@
+name: build-3dsx
+# Builds the 3DS binary and publishes it to the `builds` branch (3dsx + logs + SOURCE_COMMIT)
+# so it can be fetched without a local PC build.
+on:
+  push:
+    branches: ["**", "!builds"]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: devkitpro/devkitarm
+    steps:
+      - name: Tools
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq python3 curl ca-certificates git >/dev/null
+          git config --global --add safe.directory '*'
+      - uses: actions/checkout@v4
+      - name: UQM 0.8.0 source
+        run: |
+          curl -fL --retry 3 -o uqm-src.tgz https://downloads.sourceforge.net/project/sc2/UQM/0.8/uqm-0.8.0-src.tgz
+          tar xzf uqm-src.tgz
+          python3 tools/patch_uqm.py uqm-0.8.0
+      - name: Build
+        run: make -f Makefile.3ds -j$(nproc) 2>&1 | tee build.log; test -f uqm.3dsx
+      - name: Collect
+        if: always()
+        run: |
+          mkdir -p out
+          cp uqm.3dsx build.log out/ 2>/dev/null || true
+          echo "$GITHUB_SHA" > out/SOURCE_COMMIT
+      - name: Publish to builds branch
+        if: always()
+        run: |
+          cd out
+          git init -q -b builds
+          git config user.name "build-bot"; git config user.email "build-bot@users.noreply.github.com"
+          git add -A; git commit -qm "build of ${GITHUB_SHA}"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" builds
