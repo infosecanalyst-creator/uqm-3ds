@@ -399,6 +399,58 @@ enum {
 typedef struct { short x, y, w, h; short act, arg; } Region;
 static Region regions[64];
 static int nregions = 0;
+/* The standard touch click (Ryan's rule for every 3DS port): a very quiet 28 ms tick on its own
+   DSP channel (23), next to the engine's audio. ndspInit is reference counted. */
+#ifndef UQM3DS_HARNESS
+static int click_ok = -1;
+static s16 *click_pcm;
+static ndspWaveBuf click_wb;
+static void
+ui_click (void)
+{
+	if (click_ok < 0)
+	{
+		const int n = 22050 * 28 / 1000;
+		unsigned seed = 12345;
+		int i;
+		click_ok = 0;
+		if (R_FAILED (ndspInit ()))
+			return;
+		click_pcm = (s16 *) linearAlloc (n * sizeof (s16));
+		if (!click_pcm)
+			return;
+		for (i = 0; i < n; i++)
+		{
+			const float t = (float) i / 22050.f;
+			float noise;
+			seed = seed * 1664525u + 1013904223u;
+			noise = ((int) (seed >> 16) - 32768) / 32768.f;
+			click_pcm[i] = (s16) ((0.75f * sinf (6.2831853f * 1900.f * t)
+					+ 0.25f * noise) * expf (-t * 260.f) * 20000.f);
+		}
+		DSP_FlushDataCache (click_pcm, n * sizeof (s16));
+		click_ok = 1;
+	}
+	if (click_ok != 1)
+		return;
+	{
+		float mix[12] = { 0.8f, 0.8f };
+		ndspChnWaveBufClear (23);
+		ndspChnReset (23);
+		ndspChnSetInterp (23, NDSP_INTERP_LINEAR);
+		ndspChnSetRate (23, 22050.f);
+		ndspChnSetFormat (23, NDSP_FORMAT_MONO_PCM16);
+		ndspChnSetMix (23, mix);
+		memset (&click_wb, 0, sizeof click_wb);
+		click_wb.data_vaddr = click_pcm;
+		click_wb.nsamples = 22050 * 28 / 1000;
+		ndspChnWaveBufAdd (23, &click_wb);
+	}
+}
+#else
+static void ui_click (void) {}
+#endif
+
 static int touch_act = ACT_NONE, touch_arg = 0;   /* armed on press */
 static int touch_live = 0;                          /* finger still on it */
 
@@ -2757,6 +2809,8 @@ handle_touch (u32 down, u32 held, u32 up)
 			touch_act = r ? r->act : (play_mode () ? ACT_GAME : ACT_NONE);
 			touch_arg = r ? r->arg : 0;
 			touch_live = 1;
+			if (touch_act != ACT_NONE && touch_act != ACT_GAME)
+				ui_click ();   /* every button press clicks */
 			drag_x0 = drag_last_x = tp.px;
 			drag_y0 = drag_last_y = tp.py;
 			dragging = 0;
