@@ -301,11 +301,33 @@ static u32 stat_frames = 0, stat_fps = 0;
 static u64 stat_ticks = 0, stat_us = 0;     /* present cost, last second */
 static u64 stat_second_start = 0;
 
+/* left-handed play: the D-pad and the face buttons swap places
+ * (Y<->Up, A<->Right, B<->Down, X<->Left), applied where HID is read */
+static int lefty = 0;
+
+static u32
+lefty_remap (u32 m)
+{
+	static const u32 pr[4][2] = { { KEY_Y, KEY_DUP }, { KEY_A, KEY_DRIGHT },
+			{ KEY_B, KEY_DDOWN }, { KEY_X, KEY_DLEFT } };
+	u32 o = m;
+	int i;
+	if (!lefty)
+		return m;
+	for (i = 0; i < 4; ++i)
+	{
+		o &= ~(pr[i][0] | pr[i][1]);
+		if (m & pr[i][0]) o |= pr[i][1];
+		if (m & pr[i][1]) o |= pr[i][0];
+	}
+	return o;
+}
+
 static void
 save_port_settings (void)
 {
 	char buf[64];
-	snprintf (buf, sizeof buf, "screens=%d\nstats=%d\n", layout, show_stats);
+	snprintf (buf, sizeof buf, "screens=%d\nstats=%d\nlefty=%d\n", layout, show_stats, lefty);
 	write_file (PORT3DS_ROOT "/port3ds.cfg", buf);
 }
 
@@ -322,6 +344,8 @@ load_port_settings (void)
 		layout = atoi (p + 8) ? LAYOUT_GAME_BOTTOM : LAYOUT_GAME_TOP;
 	if ((p = strstr (buf, "stats=")))
 		show_stats = atoi (p + 6) ? 1 : 0;
+	if ((p = strstr (buf, "lefty=")))
+		lefty = atoi (p + 6) ? 1 : 0;
 }
 
 static gfxScreen_t
@@ -389,7 +413,7 @@ static void draw_confirm (int ox);
 
 /* ---- touch regions, rebuilt on every draw ---- */
 enum {
-	ACT_NONE, ACT_PAUSE, ACT_HELP, ACT_SWAP, ACT_DIM, ACT_STATS,
+	ACT_NONE, ACT_PAUSE, ACT_HELP, ACT_SWAP, ACT_DIM, ACT_STATS, ACT_LEFTY,
 	ACT_KEYBOARD, ACT_HELP_PREV, ACT_HELP_CLOSE, ACT_HELP_NEXT, ACT_MAN_SEC,
 	ACT_REPLY, ACT_REPLY_MORE, ACT_SKIP, ACT_REPLAY,
 	ACT_MAP, ACT_GO, ACT_ZOOM_IN, ACT_ZOOM_OUT, ACT_SHIP, ACT_SHORTCUT,
@@ -967,7 +991,7 @@ draw_toolbar (int ox, int mode)
 {
 	static const struct { const char *label; int act; int w; } tb[] = {
 		{ "II", ACT_PAUSE, 26 }, { "?", ACT_HELP, 26 }, { "SWAP", ACT_SWAP, 40 },
-		{ "DIM", ACT_DIM, 32 }, { "FPS", ACT_STATS, 32 } };
+		{ "DIM", ACT_DIM, 32 }, { "FPS", ACT_STATS, 32 }, { "LH", ACT_LEFTY, 24 } };
 	int i, x = ox + 320 - 3;
 	char buf[40];
 
@@ -978,7 +1002,7 @@ draw_toolbar (int ox, int mode)
 	{
 		x -= tb[i].w + 2;
 		button (x, 2, tb[i].w, 18, tb[i].label, tb[i].act, 0,
-				tb[i].act == ACT_STATS && show_stats, 0, 0);
+				(tb[i].act == ACT_STATS && show_stats) || (tb[i].act == ACT_LEFTY && lefty), 0, 0);
 	}
 	if (show_stats)
 	{
@@ -2693,6 +2717,7 @@ do_action (int act, int arg, int px, int py)
 		case ACT_SWAP: toggle_layout (); return;
 		case ACT_DIM: set_backlight (1); break;
 		case ACT_STATS: show_stats = !show_stats; save_port_settings (); break;
+		case ACT_LEFTY: lefty = !lefty; save_port_settings (); break;
 		case ACT_KEYBOARD: if (char_mode) open_keyboard (); return;
 		case ACT_HELP_PREV: man_step (-1); break;
 		case ACT_HELP_CLOSE: man_close (); break;
@@ -2888,9 +2913,9 @@ port3ds_pump_input (void)
 	}
 
 	hidScanInput ();
-	kdown = hidKeysDown ();
-	kheld = hidKeysHeld ();
-	kup = hidKeysUp ();
+	kdown = lefty_remap (hidKeysDown ());
+	kheld = lefty_remap (hidKeysHeld ());
+	kup = lefty_remap (hidKeysUp ());
 
 	/* port hotkeys */
 	if (kdown & KEY_ZL)

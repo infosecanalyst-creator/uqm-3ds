@@ -73,6 +73,7 @@ ZL puts the game on the top screen instead, with stereo 3D, and turns the touch 
 | II | Pause.
 | ? | This manual.
 | SWAP | Swap the screens, like ZL.
+| LH | Left-handed play: the D-pad and the A/B/X/Y buttons swap places (Y/Up, A/Right, B/Down, X/Left). Saved.
 
 Pressing any button or the pad takes control back from the stylus.
 
@@ -185,7 +186,7 @@ Setup (main menu) changes music, speech, subtitles, the menu style (PC or 3DO) a
 ## Files on the SD card
 | sdmc:/3ds/uqm/save | Your saved games.
 | uqm.cfg | The game's settings.
-| port3ds.cfg | Which screen the game is on, and FPS.
+| port3ds.cfg | Which screen the game is on, FPS and left-handed play.
 | uqm.log | Errors, for bug reports.
 | manual.txt | Replaces this manual (see the last section).
 
