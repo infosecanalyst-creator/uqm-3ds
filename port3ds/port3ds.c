@@ -887,6 +887,20 @@ static const Legend legend_text[] = {
 	{"UP/DOWN", "Pick letter"}, {"LEFT/RIGHT", "Move"},
 	{"A", "Done"}, {"SELECT", "Cancel"}, {NULL, NULL} };
 
+/* Left-handed mode swaps the D-pad and A/B/X/Y: show the button the player actually presses. */
+static const char *
+chip_name (const char *c)
+{
+	static const char *const sw[][2] = {
+		{"A", "RIGHT"}, {"B", "DOWN"}, {"X", "LEFT"}, {"PAD", "ABXY"}, {"Y / UP", "UP / Y"},
+		{"RIGHT", "A"}, {"LEFT", "X"}, {"UP/DOWN", "Y / B"}, {"LEFT/RIGHT", "X / A"} };
+	size_t i;
+	if (!lefty) return c;
+	for (i = 0; i < sizeof sw / sizeof sw[0]; ++i)
+		if (!strcmp (c, sw[i][0])) return sw[i][1];
+	return c;
+}
+
 static void
 draw_legend_list (int ox, const Legend *lg, int y0)
 {
@@ -896,9 +910,10 @@ draw_legend_list (int ox, const Legend *lg, int y0)
 		const int col = i % 2, row = i / 2;
 		const int x = ox + 8 + col * 156;
 		const int y = y0 + row * 26;
-		const int cw = text_w (lg[i].chip, 0) + 10;
+		const char *chip = chip_name (lg[i].chip);
+		const int cw = text_w (chip, 0) + 10;
 		box (x, y, cw, 18, COL_CHIP, COL_BG);
-		text (x + 5, y + 3, lg[i].chip, COL_TEXT, 0);
+		text (x + 5, y + 3, chip, COL_TEXT, 0);
 		text (x + cw + 6, y + 2, lg[i].what, COL_TEXT, 1);
 	}
 }
@@ -1557,7 +1572,8 @@ draw_man_top (void)
 		fill (394, 28 + (195 - h) * top / max, 3, h, COL_ACCENT);
 	}
 	fill (0, 224, 400, 16, COL_HEADER);
-	text (6, 226, "Stick: scroll    D-pad, L / R: section    B: close", COL_DIM, 0);
+	text (6, 226, lefty ? "Stick: scroll    A/B/X/Y, L / R: section    D-pad down: close"
+	                    : "Stick: scroll    D-pad, L / R: section    B: close", COL_DIM, 0);
 }
 
 /* the choosing side: a button per section */
