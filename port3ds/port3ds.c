@@ -264,11 +264,20 @@ blit_to_fb (u32 *fb, int fb_x, const u32 *src, int w, int src_pitch_px)
 	}
 }
 
+/* UI rule 8: the game on the top screen fills all 400 columns (320 -> 400) */
 static void
-clear_fb_columns (u32 *fb, int x0, int w)
+blit_fill_top (u32 *fb, const u32 *src, int src_pitch_px)
 {
-	memset (fb + x0 * 240, 0, (size_t) w * 240 * sizeof (u32));
+	int x, y;
+	for (x = 0; x < 400; ++x)
+	{
+		u32 *col = fb + x * 240 + 239;
+		const u32 *s = src + x * 4 / 5;
+		for (y = 0; y < 240; ++y, s += src_pitch_px)
+			col[-y] = *s;
+	}
 }
+
 
 /* ------------------------------------------------------------------ */
 /* state                                                                */
@@ -2476,19 +2485,20 @@ present_stereo (const SDL_Surface *frame)
 			const u32 *s = pix + y * pitch;
 			const signed char *dr = depth_buf[y];
 			const int fy = 239 - y;
-			for (x = 0; x < 320; ++x)
-			{
-				const int dd = dr[x];
-				const int X = 40 + x + off[dd + 16];
+			for (x = 0; x < 400; ++x)
+			{	/* UI rule 8: the 320-wide picture is stretched to fill the 400-wide screen */
+				const int sx = x * 4 / 5;
+				const int dd = dr[sx];
+				const int X = x + off[dd + 16];
 				int idx;
 				/* black is empty space: never let it hide what lies behind */
-				if (!(s[x] & 0xFFFFFF00u) || (unsigned) X >= 400u)
+				if (!(s[sx] & 0xFFFFFF00u) || (unsigned) X >= 400u)
 					continue;
 				idx = X * 240 + fy;
 				if (dd < zb[idx])
 				{
 					zb[idx] = (signed char) dd;
-					fb[idx] = s[x];
+					fb[idx] = s[sx];
 				}
 			}
 		}
@@ -2524,7 +2534,7 @@ void
 port3ds_present (SDL_Surface *frame)
 {
 	const gfxScreen_t scr = game_screen ();
-	const int x0 = (scr == GFX_TOP) ? 40 : 0;
+	const int x0 = 0;
 	u64 t0;
 	u16 fw, fh;
 	u32 *fb;
@@ -2561,11 +2571,8 @@ port3ds_present (SDL_Surface *frame)
 	}
 	fb = (u32 *) gfxGetFramebuffer (scr, GFX_LEFT, &fw, &fh);
 	if (scr == GFX_TOP)
-	{	/* pillar-box: the 40-pixel bands either side stay black */
-		clear_fb_columns (fb, 0, 40);
-		clear_fb_columns (fb, 360, 40);
-	}
-	if (scr == GFX_BOTTOM && play_mode ())
+		blit_fill_top (fb, (const u32 *) frame->pixels, frame->pitch / 4);
+	else if (play_mode ())
 		blit_game_ovl (fb, (const u32 *) frame->pixels, frame->pitch / 4);
 	else
 		blit_to_fb (fb, x0, (const u32 *) frame->pixels, 320, frame->pitch / 4);

@@ -52,7 +52,7 @@ static const char manual_builtin[] =
 	"You never need to touch it. While flying it shows the galaxy map around your ship, your fuel range, your fuel, money (RU), crew and landers, where you are, and the course you have set. In combat and menus it shows what each button does.\n"
 	"\n"
 	"## Swapping screens: ZL\n"
-	"ZL puts the game on the top screen instead, with stereo 3D, and turns the touch screen into a control panel: galaxy map, menu buttons, replies and the Super Melee grid. Press ZL again to swap back. The game remembers your choice.\n"
+	"ZL puts the game on the top screen instead, filling it, with stereo 3D, and turns the touch screen into a control panel: galaxy map, menu buttons, replies and the Super Melee grid. Press ZL again to swap back. The game remembers your choice.\n"
 	"\n"
 	"# Controls\n"
 	"| A | Select. In combat: fire.\n"
