@@ -215,12 +215,14 @@ text_w (const char *s, int big)
 	return (int) strlen (s) * (big ? FONT_BIG_W : FONT_SMALL_W);
 }
 
+static int text_adv = 0;   /* nonzero: condensed small text (advance in px; glyphs keep their width) */
 static void
 text (int x, int y, const char *s, u32 c, int big)
 {
 	const int cw = big ? FONT_BIG_W : FONT_SMALL_W;
 	const int ch = big ? FONT_BIG_H : FONT_SMALL_H;
-	for (; *s; ++s, x += cw)
+	const int adv = (!big && text_adv) ? text_adv : cw;
+	for (; *s; ++s, x += adv)
 	{
 		const uint16_t *rows;
 		int r, b;
@@ -521,8 +523,16 @@ button (int x, int y, int w, int h, const char *label, int act, int arg,
 	const u32 fg = hot ? COL_HOT_TEXT : (disabled ? COL_OFF : COL_TEXT);
 	box (x, y, w, h, edge, COL_BG);
 	box (x + 1, y + 1, w - 2, h - 2, bg, edge);
-	text_center (x, y + (h - (big ? FONT_BIG_H : FONT_SMALL_H)) / 2, w,
-			label, fg, big);
+	if (!big && text_w (label, 0) > w - 4)
+	{	/* a 7-letter ship name in a 40-px slot: 5-px letter spacing so it fits inside */
+		const int tw = (int) strlen (label) * 5 - 1;
+		text_adv = 5;
+		text (x + (w - tw) / 2, y + (h - FONT_SMALL_H) / 2, label, fg, 0);
+		text_adv = 0;
+	}
+	else
+		text_center (x, y + (h - (big ? FONT_BIG_H : FONT_SMALL_H)) / 2, w,
+				label, fg, big);
 	if (!disabled)
 		add_region (x, y, w, h, act, arg);
 }
