@@ -620,7 +620,7 @@ static int sel_star = -1;
 static Port3DSShip ship;
 static u64 last_nav_draw = 0;
 
-static int map_x = 2, map_y = 40, map_w = 212, map_h = 170;
+static int map_x = 6, map_y = 50, map_w = 206, map_h = 156;   /* touch deck: 6..212 x 50..206 */
 static int nav_dash = 0;        /* drawing the map on the (untouchable) dashboard */
 
 static float
@@ -677,7 +677,7 @@ draw_nav (int ox)
 	fmt_fuel (name, sizeof name, ship.fuel);
 	snprintf (buf, sizeof buf, "FUEL %s  RU %u  CREW %d  LANDERS %d",
 			name, ship.ru, ship.crew, ship.landers);
-	text (ox + 4, 26, buf, COL_TEXT, 0);
+	text (ox + 6, nav_dash ? 26 : 36, buf, COL_TEXT, 0);
 
 	/* ship menu, one tap each (was B, then the cursor along the menu, then A) */
 	if (!nav_dash)
@@ -686,9 +686,9 @@ draw_nav (int ox)
 			{ "SCAN", P3SC_SCAN }, { "DEVICES", P3SC_DEVICES }, { "CARGO", P3SC_CARGO },
 			{ "ROSTER", P3SC_ROSTER }, { "SAVE", P3SC_SAVE }, { "LOAD", P3SC_LOAD } };
 		const int first = ship.in_orbit ? 0 : 1, nb = 6 - first;
-		const int bw = (316 - (nb - 1) * 3) / nb;
+		const int bw = (308 - (nb - 1) * 4) / nb;
 		for (i = first; i < 6; ++i)
-			button (ox + 2 + (i - first) * (bw + 3), 214, bw, 24, sc[i].label,
+			button (ox + 6 + (i - first) * (bw + 4), 210, bw, 24, sc[i].label,
 					ACT_SHORTCUT, sc[i].sc, 0, 0, 1);
 	}
 
@@ -786,8 +786,8 @@ draw_nav (int ox)
 	/* side panel */
 	if (!nav_dash)
 	{
-		const int px = ox + 218, pw = 98;
-		int y = 42;
+		const int px = ox + 218, pw = 98;   /* panel buttons x 216..314 */
+		int y = 52;
 		if (sel_star >= 0)
 		{
 			int x0, y0, c, sz, need, nl;
@@ -822,7 +822,7 @@ draw_nav (int ox)
 						&& ship.dest_y == y0;
 				const int is_here = (sel_star == ship.star)
 						|| (x0 == ship.ux && y0 == ship.uy);
-				button (px - 2, 112, pw, 28,
+				button (px - 2, 120, pw, 26,
 						is_here ? "YOU ARE HERE" : is_dest ? "ON COURSE" : "SET COURSE",
 						ACT_GO, 0, !is_dest && !is_here, is_dest || is_here, 0);
 			}
@@ -834,9 +834,9 @@ draw_nav (int ox)
 			text (px, y, "and fuel.", COL_DIM, 0); y += 13;
 			text (px, y, "Drag to pan.", COL_DIM, 0);
 		}
-		button (px - 2, 144, 47, 24, "+", ACT_ZOOM_IN, 0, 0, map_zoom >= 3, 1);
-		button (px + 49, 144, 47, 24, "-", ACT_ZOOM_OUT, 0, 0, map_zoom <= 0, 1);
-		button (px - 2, 171, pw, 20, map_follow ? "SHIP (FOLLOW)" : "SHIP",
+		button (px - 2, 150, 47, 24, "+", ACT_ZOOM_IN, 0, 0, map_zoom >= 3, 1);
+		button (px + 49, 150, 47, 24, "-", ACT_ZOOM_OUT, 0, 0, map_zoom <= 0, 1);
+		button (px - 2, 178, pw, 24, map_follow ? "SHIP (FOLLOW)" : "SHIP",
 				ACT_SHIP, 0, 0, 0, 0);
 		if (ship.have_dest)
 		{
@@ -852,8 +852,8 @@ draw_nav (int ox)
 			else
 				strcpy (name, "map point");
 			snprintf (buf, sizeof buf, "TO %s", name);
-			buf[16] = '\0';
-			text (px, 197, buf, COL_HOT, 0);
+			buf[33] = '\0';   /* on the map's bottom edge (the shortcut row sits under the panel) */
+			text (ox + map_x + 3, map_y + map_h - 14, buf, COL_HOT, 0);
 		}
 	}
 }
@@ -1014,18 +1014,19 @@ static void
 draw_toolbar (int ox, int mode)
 {
 	static const struct { const char *label; int act; int w; } tb[] = {
-		{ "II", ACT_PAUSE, 26 }, { "?", ACT_HELP, 26 }, { "SWAP", ACT_SWAP, 40 },
-		{ "DIM", ACT_DIM, 32 }, { "FPS", ACT_STATS, 32 }, { "LH", ACT_LEFTY, 24 } };
-	int i, x = ox + 320 - 3;
+		{ "II", ACT_PAUSE, 26 }, { "?", ACT_HELP, 26 }, { "SWAP", ACT_SWAP, 34 },
+		{ "DIM", ACT_DIM, 30 }, { "FPS", ACT_STATS, 30 }, { "LH", ACT_LEFTY, 26 } };
+	int i, x = ox + 314 + 4;
 	char buf[40];
 
-	fill (0, 0, deck_w, 22, COL_HEADER);
-	fill (0, 22, deck_w, 1, COL_BTN_EDGE);
-	text (ox + 5, 5, mode_title (mode), COL_ACCENT, 0);
+	/* rule 11: a 32-px header with 24-px buttons, 4 px apart, 6 px from the edges */
+	fill (0, 0, deck_w, 32, COL_HEADER);
+	fill (0, 32, deck_w, 1, COL_BTN_EDGE);
+	text (ox + 6, 10, mode_title (mode), COL_ACCENT, 0);
 	for (i = (int) (sizeof tb / sizeof tb[0]) - 1; i >= 0; --i)
 	{
-		x -= tb[i].w + 2;
-		button (x, 2, tb[i].w, 18, tb[i].label, tb[i].act, 0,
+		x -= tb[i].w + 4;
+		button (x, 6, tb[i].w, 24, tb[i].label, tb[i].act, 0,
 				(tb[i].act == ACT_STATS && show_stats) || (tb[i].act == ACT_LEFTY && lefty), 0, 0);
 	}
 	if (show_stats)
@@ -1033,7 +1034,7 @@ draw_toolbar (int ox, int mode)
 		snprintf (buf, sizeof buf, "%lufps %lu.%lums", (unsigned long) stat_fps,
 				(unsigned long) (stat_us / 1000),
 				(unsigned long) ((stat_us % 1000) / 100));
-		text (x - 4 - text_w (buf, 0), 5, buf, COL_DIM, 0);
+		text (x - 4 - text_w (buf, 0), 10, buf, COL_DIM, 0);
 	}
 }
 
@@ -1041,41 +1042,41 @@ static void
 draw_replies (int ox)
 {
 	char lines[3][64];
-	int i, y = 28, shown = 0, more = 0;
+	int i, y = 38, shown = 0, more = 0;
 	SDL_mutexP (comm_lock);
 	if (comm_page >= comm_n)
 		comm_page = 0;
 	for (i = comm_page; i < comm_n; ++i)
 	{
 		const int nl = wrap_text (comm_text[i], 50, lines, 3);
-		const int h = 8 + nl * 13;
+		const int h = 8 + nl * 13 < 24 ? 24 : 8 + nl * 13;   /* rule 11: at least 24 px */
 		const int hot = (i == comm_cur);
 		int k;
-		if (y + h > (i + 1 < comm_n ? 206 : 238) && shown > 0)
+		if (y + h > (i + 1 < comm_n ? 204 : 234) && shown > 0)
 		{
 			more = 1;
 			break;
 		}
-		box (ox + 3, y, 314, h, hot ? COL_ACCENT : COL_BTN_EDGE, COL_BG);
-		box (ox + 4, y + 1, 312, h - 2,
+		box (ox + 6, y, 308, h, hot ? COL_ACCENT : COL_BTN_EDGE, COL_BG);
+		box (ox + 7, y + 1, 306, h - 2,
 				(touch_live && touch_act == ACT_REPLY && touch_arg == i)
 				? COL_BTN_DOWN : COL_BTN, hot ? COL_ACCENT : COL_BTN_EDGE);
 		for (k = 0; k < nl; ++k)
-			text (ox + 9, y + 4 + k * 13, lines[k], COL_TEXT, 0);
-		add_region (ox + 3, y, 314, h, ACT_REPLY, i);
+			text (ox + 12, y + (h - nl * 13) / 2 + k * 13, lines[k], COL_TEXT, 0);
+		add_region (ox + 6, y, 308, h, ACT_REPLY, i);
 		y += h + 4;
 		++shown;
 	}
 	SDL_mutexV (comm_lock);
 	if (more || comm_page > 0)
-		button (ox + 3, 212, 314, 26, more ? "MORE REPLIES  v" : "BACK TO FIRST  ^",
+		button (ox + 6, 208, 308, 26, more ? "MORE REPLIES  v" : "BACK TO FIRST  ^",
 				ACT_REPLY_MORE, 0, 0, 0, 0);
 }
 
 static void
 draw_menu (int ox)
 {
-	int i, y = 27, h, gap = 4;
+	int i, y = 38, h, gap = 4;
 	if (deck_ctx == CTX3DS_HYPERSPACE || deck_ctx == CTX3DS_SOLARSYS)
 	{	/* keep the ship's numbers in view while its menus are open */
 		char buf[96], f[16];
@@ -1083,22 +1084,30 @@ draw_menu (int ox)
 		fmt_fuel (f, sizeof f, ship.fuel);
 		snprintf (buf, sizeof buf, "FUEL %s  RU %u  CREW %d  LANDERS %d",
 				f, ship.ru, ship.crew, ship.landers);
-		text (ox + 4, 26, buf, COL_TEXT, 0);
-		y = 42;
+		text (ox + 6, 36, buf, COL_TEXT, 0);
+		y = 52;
 	}
-	{
+	{	/* rule 11: rows >= 24 px, 4 apart, ending 6 px above the edge; two columns when needed */
 		const int n = menu_n + (menu_base == P3M_MAIN);   /* + MANUAL on the main menu */
-		h = (238 - y) / (n > 0 ? n : 1) - gap;
+		const int y0 = y;
+		int cols = 1, rows = n > 0 ? n : 1, cw = 308;
+		h = (234 - y0 + gap) / rows - gap;
+		if (h < 24)
+		{
+			cols = 2; rows = (n + 1) / 2; cw = 152;
+			h = (234 - y0 + gap) / (rows > 0 ? rows : 1) - gap;
+		}
 		if (h > 40)
 			h = 40;
-		if (h < 18)
-			gap = 2, h = (238 - y) / n - gap;
-		for (i = 0; i < n; ++i, y += h + gap)
+		for (i = 0; i < n; ++i)
+		{
+			const int bx = ox + 6 + (i / rows) * (cw + 4), by = y0 + (i % rows) * (h + gap);
 			if (i == menu_n)
-				button (ox + 6, y, 308, h, "MANUAL", ACT_HELP, 0, 0, 0, h >= 18);
+				button (bx, by, cw, h, "MANUAL", ACT_HELP, 0, 0, 0, h >= 18);
 			else
-				button (ox + 6, y, 308, h, menu_items[i].label, ACT_MENU, i,
+				button (bx, by, cw, h, menu_items[i].label, ACT_MENU, i,
 						menu_items[i].state == menu_cur, 0, h >= 18);
+		}
 	}
 }
 
@@ -1110,18 +1119,20 @@ draw_melee_team (int ox, int team, int y)
 {
 	char buf[64];
 	int r, c;
-	snprintf (buf, sizeof buf, "%s  %s", team == 0 ? "TOP" : "BOTTOM",
-			melee.name[team]);
-	text (ox + 4, y, buf, COL_ACCENT, 0);
-	snprintf (buf, sizeof buf, "%d PTS", melee.value[team]);
-	text (ox + 316 - text_w (buf, 0), y, buf, COL_DIM, 0);
+	/* a team block, 80 px: label + controls row (drawn by draw_melee_buttons), then 2 x 7 slots,
+	   40x24, 4 px apart (rule 11) */
+	const int lw = melee.net ? 102 : 122;   /* room left of the control buttons */
+	snprintf (buf, sizeof buf, "%s %dPT %s", team == 0 ? "TOP" : "BOT",
+			melee.value[team], melee.name[team]);
+	buf[lw / 6] = '\0';
+	text (ox + 6, y + 6, buf, COL_ACCENT, 0);
 	for (r = 0; r < 2; ++r)
 		for (c = 0; c < 7; ++c)
 		{
 			const int slot = r * 7 + c;
 			const int sh = melee.ships[team][slot];
 			const int sel = melee_pick_side == team && melee_pick_slot == slot;
-			button (ox + 3 + c * 45, y + 12 + r * 23, 43, 21,
+			button (ox + 6 + c * 44, y + 28 + r * 28, 40, 24,
 					sh == 255 ? "-" : port3ds_ship_short (sh),
 					ACT_MELEE_SLOT, team * 16 + slot, sel, 0, 0);
 		}
@@ -1133,18 +1144,19 @@ draw_melee_buttons (int ox, int top, int y)
 	/* the TOP controls button drives PlayerControl[1] (as on screen) */
 	const int ctl = melee.control[top ? 1 : 0];
 	char buf[40];
-	int x = ox + 3, w = melee.net ? 110 : 150;
+	/* on the team's label row, right-aligned: CONTROL [NET] LOAD SAVE, 24 px, 4 apart */
+	int x = ox + (melee.net ? 112 : 132), w = melee.net ? 66 : 86;
 	snprintf (buf, sizeof buf, "%s", control_name[ctl < 5 ? ctl : 0]);
-	button (x, y, w, 22, buf, ACT_MELEE_OPT, top ? P3MO_CTRL_TOP : P3MO_CTRL_BOT, 0, 0, 0);
-	x += w + 3;
+	button (x, y, w, 24, buf, ACT_MELEE_OPT, top ? P3MO_CTRL_TOP : P3MO_CTRL_BOT, 0, 0, 0);
+	x += w + 4;
 	if (melee.net)
 	{
-		button (x, y, 48, 22, "NET", ACT_MELEE_OPT, top ? P3MO_NET_TOP : P3MO_NET_BOT, 0, 0, 0);
-		x += 51;
+		button (x, y, 40, 24, "NET", ACT_MELEE_OPT, top ? P3MO_NET_TOP : P3MO_NET_BOT, 0, 0, 0);
+		x += 44;
 	}
-	w = (ox + 317 - x - 3) / 2;
-	button (x, y, w, 22, "LOAD", ACT_MELEE_OPT, top ? P3MO_LOAD_TOP : P3MO_LOAD_BOT, 0, 0, 0);
-	button (x + w + 3, y, w, 22, "SAVE", ACT_MELEE_OPT, top ? P3MO_SAVE_TOP : P3MO_SAVE_BOT, 0, 0, 0);
+	w = (ox + 314 - x - 4) / 2;
+	button (x, y, w, 24, "LOAD", ACT_MELEE_OPT, top ? P3MO_LOAD_TOP : P3MO_LOAD_BOT, 0, 0, 0);
+	button (x + w + 4, y, w, 24, "SAVE", ACT_MELEE_OPT, top ? P3MO_SAVE_TOP : P3MO_SAVE_BOT, 0, 0, 0);
 }
 
 static void
@@ -1153,19 +1165,19 @@ draw_net (int ox)
 	char buf[96];
 	snprintf (buf, sizeof buf, "%s player.  This 3DS: %s",
 			netdlg.side ? "Top" : "Bottom", net_local_ip ());
-	text (ox + 4, 26, buf, COL_ACCENT, 0);
+	text (ox + 6, 36, buf, COL_ACCENT, 0);
 	snprintf (buf, sizeof buf, "HOST  %s", netdlg.host[0] ? netdlg.host : "(tap to type)");
-	button (ox + 3, 42, 314, 28, buf, ACT_NET, P3ND_HOST, 0, 0, 1);
+	button (ox + 6, 52, 308, 28, buf, ACT_NET, P3ND_HOST, 0, 0, 1);
 	snprintf (buf, sizeof buf, "PORT  %s", netdlg.port);
-	button (ox + 3, 74, 200, 28, buf, ACT_NET, P3ND_PORT, 0, 0, 1);
+	button (ox + 6, 84, 198, 28, buf, ACT_NET, P3ND_PORT, 0, 0, 1);
 	snprintf (buf, sizeof buf, "DELAY %d", netdlg.delay);
-	text (ox + 210, 82, buf, COL_TEXT, 0);
-	button (ox + 262, 74, 26, 28, "-", ACT_NET, P3ND_DELAY_DOWN, 0, netdlg.delay <= 0, 1);
-	button (ox + 291, 74, 26, 28, "+", ACT_NET, P3ND_DELAY_UP, 0, netdlg.delay >= 9, 1);
-	button (ox + 3, 110, 314, 34, "CONNECT TO HOST", ACT_NET, P3ND_CONNECT, 1, !netdlg.host[0], 1);
-	button (ox + 3, 150, 314, 34, "WAIT FOR CONNECTION", ACT_NET, P3ND_LISTEN, 0, 0, 1);
-	button (ox + 3, 190, 314, 26, "CANCEL", ACT_NET, P3ND_CANCEL, 0, 0, 1);
-	text_center (0, 224, deck_w, "One 3DS waits; the other connects to its IP", COL_DIM, 0);
+	text (ox + 210, 92, buf, COL_TEXT, 0);
+	button (ox + 256, 84, 26, 28, "-", ACT_NET, P3ND_DELAY_DOWN, 0, netdlg.delay <= 0, 1);
+	button (ox + 288, 84, 26, 28, "+", ACT_NET, P3ND_DELAY_UP, 0, netdlg.delay >= 9, 1);
+	button (ox + 6, 116, 308, 32, "CONNECT TO HOST", ACT_NET, P3ND_CONNECT, 1, !netdlg.host[0], 1);
+	button (ox + 6, 152, 308, 32, "WAIT FOR CONNECTION", ACT_NET, P3ND_LISTEN, 0, 0, 1);
+	button (ox + 6, 188, 308, 26, "CANCEL", ACT_NET, P3ND_CANCEL, 0, 0, 1);
+	text_center (0, 220, deck_w, "One 3DS waits; the other connects to its IP", COL_DIM, 0);
 }
 
 static void
@@ -1189,24 +1201,24 @@ net_keyboard (int which)
 static void
 draw_pick (int ox)
 {
-	int pl, y = 26, both = pick_on[0] && pick_on[1];
+	int pl, y = 36, both = pick_on[0] && pick_on[1];
 	for (pl = 1; pl >= 0; --pl)
 	{
 		int r, c;
 		if (!pick_on[pl])
 			continue;
-		text (ox + 4, y, pl == 1 ? "TOP PLAYER" : "BOTTOM PLAYER", COL_ACCENT, 0);
+		text (ox + 6, y, pl == 1 ? "TOP PLAYER" : "BOTTOM PLAYER", COL_ACCENT, 0);
 		for (r = 0; r < 2; ++r)
 			for (c = 0; c < 7; ++c)
 			{
 				const int slot = r * 7 + c, sh = pick_ships[pl][slot];
-				button (ox + 3 + c * 45, y + 14 + r * (both ? 25 : 40), 43, both ? 23 : 37,
+				button (ox + 6 + c * 44, y + 16 + r * (both ? 28 : 41), 40, both ? 24 : 37,
 						sh == 255 ? "" : port3ds_ship_short (sh), ACT_PICK, pl * 16 + slot,
 						0, sh == 255, 0);
 			}
-		button (ox + 3, y + (both ? 66 : 100), 314, both ? 26 : 40, "RANDOM SHIP",
+		button (ox + 6, y + (both ? 72 : 98), 308, both ? 24 : 40, "RANDOM SHIP",
 				ACT_PICK, pl * 16 + 15, 1, 0, 1);
-		y += both ? 106 : 160;
+		y += both ? 100 : 160;
 	}
 }
 
@@ -1219,36 +1231,26 @@ draw_melee (int ox)
 		int i;
 		snprintf (buf, sizeof buf, "%s FLEET, SLOT %d: PICK A SHIP",
 				melee_pick_side == 0 ? "TOP" : "BOTTOM", melee_pick_slot + 1);
-		text (ox + 4, 26, buf, COL_ACCENT, 0);
+		text (ox + 6, 36, buf, COL_ACCENT, 0);
 		for (i = 0; i < 25; ++i)
-		{
+		{	/* 5 x 5 of 58x26, 4 px apart (rule 11) */
 			snprintf (buf, sizeof buf, "%s %d", port3ds_ship_short (i),
 					port3ds_ship_cost (i));
-			button (ox + 3 + (i % 5) * 63, 41 + (i / 5) * 32, 60, 29, buf,
+			button (ox + 6 + (i % 5) * 62, 52 + (i / 5) * 30, 58, 26, buf,
 					ACT_MELEE_SHIP, i, melee.ships[melee_pick_side][melee_pick_slot] == i,
 					0, 0);
 		}
-		button (ox + 3, 203, 153, 32, "EMPTY SLOT", ACT_MELEE_SHIP, 255, 0, 0, 1);
-		button (ox + 162, 203, 153, 32, "CANCEL", ACT_MELEE_CANCEL, 0, 0, 0, 1);
+		button (ox + 6, 200, 152, 30, "EMPTY SLOT", ACT_MELEE_SHIP, 255, 0, 0, 1);
+		button (ox + 162, 200, 152, 30, "CANCEL", ACT_MELEE_CANCEL, 0, 0, 0, 1);
 		return;
 	}
-	draw_melee_team (ox, 0, 25);
-	draw_melee_buttons (ox, 1, 84);
-	button (ox + 3, 110, 210, 30, "BATTLE!", ACT_MELEE_OPT, P3MO_BATTLE, 1, 0, 1);
-	button (ox + 217, 110, 100, 30, "QUIT", ACT_MELEE_OPT, P3MO_QUIT, 0, 0, 1);
-	draw_melee_team (ox, 1, 145);
-	draw_melee_buttons (ox, 0, 204);
-	if (melee.net)
-	{
-		char buf[64];
-		if (port3ds_net_on ())
-			snprintf (buf, sizeof buf, "Tap a slot to change it.  This 3DS: %s", net_local_ip ());
-		else
-			snprintf (buf, sizeof buf, "Tap a slot to change it.");
-		text_center (0, 228, deck_w, buf, COL_DIM, 0);
-	}
-	else
-		text_center (0, 228, deck_w, "Tap a slot to change its ship", COL_DIM, 0);
+	/* top fleet 36..116, BATTLE/QUIT 120..148, bottom fleet 152..232 (rule 11 throughout) */
+	draw_melee_team (ox, 0, 36);
+	draw_melee_buttons (ox, 1, 36);
+	button (ox + 6, 120, 204, 28, "BATTLE!", ACT_MELEE_OPT, P3MO_BATTLE, 1, 0, 1);
+	button (ox + 214, 120, 100, 28, "QUIT", ACT_MELEE_OPT, P3MO_QUIT, 0, 0, 1);
+	draw_melee_team (ox, 1, 152);
+	draw_melee_buttons (ox, 0, 152);
 }
 
 /* ---- the instruction manual --------------------------------------------
@@ -1590,13 +1592,14 @@ static void
 draw_man_buttons (int ox)
 {
 	int i;
+	/* rule 11: 2 x 8 cells of 152x24, 4 px apart, y 6..226 (the manual page has no header) */
 	for (i = 0; i <= man_nsec && i < 16; ++i)
 	{
 		const int c = i & 1, r = i / 2;
 		if (i == man_nsec)
-			button (ox + 4 + c * 158, 26 + r * 26, 154, 24, "CLOSE", ACT_HELP_CLOSE, 0, 0, 0, 0);
+			button (ox + 6 + c * 156, 6 + r * 28, 152, 24, "CLOSE", ACT_HELP_CLOSE, 0, 0, 0, 0);
 		else
-			button (ox + 4 + c * 158, 26 + r * 26, 154, 24, man_secs[i].title,
+			button (ox + 6 + c * 156, 6 + r * 28, 152, 24, man_secs[i].title,
 					ACT_MAN_SEC, i, i == man_cur, 0, 0);
 	}
 }
@@ -1615,7 +1618,8 @@ draw_deck (void)
 
 	nregions = 0;
 	fill (0, 0, deck_w, DECK_H, COL_BG);
-	draw_toolbar (ox, mode);
+	if (mode != MODE_HELP)   /* the manual's 8 rows of section buttons need the whole height */
+		draw_toolbar (ox, mode);
 
 	switch (mode)
 	{
@@ -1626,7 +1630,7 @@ draw_deck (void)
 			draw_confirm (ox);
 			break;
 		case MODE_TEXT:
-			draw_legend_list (ox, legend_text, 32);
+			draw_legend_list (ox, legend_text, 42);
 			button (ox + 30, 120, 260, 56, "OPEN KEYBOARD", ACT_KEYBOARD, 0, 1, 0, 1);
 			text_center (0, 186, deck_w, "or pick letters with the pad", COL_DIM, 0);
 			break;
@@ -1651,7 +1655,7 @@ draw_deck (void)
 			draw_net (ox);
 			break;
 		case MODE_TALK:
-			draw_legend_list (ox, legend_talk, 32);
+			draw_legend_list (ox, legend_talk, 42);
 			button (ox + 6, 150, 150, 50, "SKIP  >>", ACT_SKIP, 0, 0, 0, 1);
 			button (ox + 164, 150, 150, 50, "<< REPLAY", ACT_REPLAY, 0, 0, 0, 1);
 			break;
@@ -1659,7 +1663,7 @@ draw_deck (void)
 			draw_legend_list (ox, deck_ctx == CTX3DS_COMBAT ? legend_combat
 					: deck_ctx == CTX3DS_STARBASE ? legend_starbase
 					: (deck_ctx == CTX3DS_HYPERSPACE || deck_ctx == CTX3DS_SOLARSYS)
-					? legend_flight : legend_menu, 32);
+					? legend_flight : legend_menu, 42);
 			break;
 	}
 	if (deck_screen () != GFX_BOTTOM)
@@ -1743,7 +1747,7 @@ draw_dash_flight (void)
 	draw_nav (0);
 	nav_dash = 0;
 	map_cx = sv_cx; map_cy = sv_cy; map_follow = sv_follow;
-	map_x = 2; map_y = 40; map_w = 212; map_h = 170;
+	map_x = 6; map_y = 50; map_w = 206; map_h = 156;
 
 	if (ship.quasispace)
 	{
@@ -1917,11 +1921,13 @@ static void
 ovl_page (const char *title, int close_act)
 {	/* a full-screen page that covers the game */
 	fill (0, 0, 320, 240, COL_BG);
-	fill (0, 0, 320, 22, COL_HEADER);
-	fill (0, 22, 320, 1, COL_BTN_EDGE);
-	text (5, 5, title, COL_ACCENT, 0);
+	if (!title)   /* the manual: no header, its buttons use the whole height */
+		return;
+	fill (0, 0, 320, 32, COL_HEADER);
+	fill (0, 32, 320, 1, COL_BTN_EDGE);
+	text (6, 10, title, COL_ACCENT, 0);
 	if (close_act)
-		button (250, 2, 66, 18, "CLOSE", close_act, 0, 0, 0, 0);
+		button (246, 6, 68, 24, "CLOSE", close_act, 0, 0, 0, 0);
 }
 
 static void
@@ -1930,11 +1936,11 @@ draw_ovl_tabs (void)
 	static const struct { const char *l; int act; int w; } t[] = {
 		{ "MENU", ACT_TAB_MENU, 56 }, { "MAP", ACT_TAB_MAP, 56 }, { "II", ACT_PAUSE, 34 },
 		{ "?", ACT_HELP, 34 }, { "SWAP", ACT_SWAP, 56 } };
-	int i, x = 2;
+	int i, x = 6;
 	for (i = 0; i < 5; ++i)
-	{
-		button (x, 1, t[i].w, 16, t[i].l, t[i].act, 0, 0, 0, 0);
-		x += t[i].w + 2;
+	{	/* rule 11: 24 px tall, 4 apart, 6 px from the edges */
+		button (x, 6, t[i].w, 24, t[i].l, t[i].act, 0, 0, 0, 0);
+		x += t[i].w + 4;
 	}
 	if (steer_mode == 2)
 	{	/* where the ship is flying to */
@@ -1952,23 +1958,33 @@ draw_ovl_tabs (void)
 static void
 draw_ovl_menu (void)
 {
-	const int x = 6, w = 240, top = 22, bot = 236;
+	/* rule 11: rows >= 24 px, 4 apart, 6 px from the edges; two columns when one is too tall */
+	const int top = 6, bot = 234;
 	const int n = menu_n + (menu_base == P3M_MAIN);   /* + MANUAL on the main menu */
-	int i, h, gap = 3, total, y;
+	int i, h, gap = 4, total, y, cols = 1, rows, w = 240, x = 6;
 	if (menu_n <= 0)
 		return;
-	h = (bot - top) / n - gap;
+	rows = n;
+	h = (bot - top + gap) / rows - gap;
+	if (h < 24)
+	{
+		cols = 2; rows = (n + 1) / 2; w = 152;
+		h = (bot - top + gap) / rows - gap;
+	}
 	if (h > 34)
 		h = 34;
-	total = n * (h + gap) - gap;
+	total = rows * (h + gap) - gap;
 	y = top + (bot - top - total) / 2;
-	fill (x - 4, y - 4, w + 8, total + 8, SHADE (COL_BG, 0xC8));
-	for (i = 0; i < n; ++i, y += h + gap)
+	fill (x - 4 < 0 ? 0 : x - 4, y - 4, cols * w + (cols - 1) * 4 + 8, total + 8, SHADE (COL_BG, 0xC8));
+	for (i = 0; i < n; ++i)
+	{
+		const int bx = x + (i / rows) * (w + 4), by = y + (i % rows) * (h + gap);
 		if (i == menu_n)
-			button (x, y, w, h, "MANUAL", ACT_HELP, 0, 0, 0, h >= 18);
+			button (bx, by, w, h, "MANUAL", ACT_HELP, 0, 0, 0, h >= 18);
 		else
-			button (x, y, w, h, menu_items[i].label, ACT_MENU, i,
+			button (bx, by, w, h, menu_items[i].label, ACT_MENU, i,
 					menu_items[i].state == menu_cur, 0, h >= 18);
+	}
 }
 
 static void
@@ -1983,37 +1999,37 @@ draw_ovl_replies (void)
 	for (i = comm_page; i < comm_n && n < MAX_REPLIES; ++i)
 	{
 		const int nl = wrap_text (comm_text[i], 50, wrapped[n], 3);
-		const int h = 8 + nl * 13;
-		if (total + h + 3 > 164 && n > 0)
+		const int h = 8 + nl * 13 < 24 ? 24 : 8 + nl * 13;   /* rule 11: at least 24 px */
+		if (total + h + 4 > 164 && n > 0)
 		{
 			more = 1;
 			break;
 		}
 		hs[n] = h;
 		nls[n] = nl;
-		total += h + 3;
+		total += h + 4;
 		++n;
 	}
 	if (more || comm_page > 0)
-		total += 24;
-	y = 239 - total;
-	fill (0, y - 3, 320, 243 - y, SHADE (COL_BG, 0xE0));
+		total += 28;
+	y = 238 - total;   /* the last row ends 6 px above the edge */
+	fill (0, y - 4, 320, 244 - y, SHADE (COL_BG, 0xE0));
 	for (i = 0; i < n; ++i)
 	{
 		const int idx = comm_page + i, hot = (idx == comm_cur);
 		int k;
-		box (3, y, 314, hs[i], hot ? COL_ACCENT : COL_BTN_EDGE, COL_BG);
-		box (4, y + 1, 312, hs[i] - 2,
+		box (6, y, 308, hs[i], hot ? COL_ACCENT : COL_BTN_EDGE, COL_BG);
+		box (7, y + 1, 306, hs[i] - 2,
 				(touch_live && touch_act == ACT_REPLY && touch_arg == idx)
 				? COL_BTN_DOWN : COL_BTN, hot ? COL_ACCENT : COL_BTN_EDGE);
 		for (k = 0; k < nls[i]; ++k)
-			text (9, y + 4 + k * 13, wrapped[i][k], COL_TEXT, 0);
-		add_region (3, y, 314, hs[i], ACT_REPLY, idx);
-		y += hs[i] + 3;
+			text (12, y + (hs[i] - nls[i] * 13) / 2 + k * 13, wrapped[i][k], COL_TEXT, 0);
+		add_region (6, y, 308, hs[i], ACT_REPLY, idx);
+		y += hs[i] + 4;
 	}
 	SDL_mutexV (comm_lock);
 	if (more || comm_page > 0)
-		button (3, y, 314, 21, more ? "MORE REPLIES  v" : "BACK TO FIRST  ^",
+		button (6, y, 308, 24, more ? "MORE REPLIES  v" : "BACK TO FIRST  ^",
 				ACT_REPLY_MORE, 0, 0, 0, 0);
 }
 
@@ -2027,7 +2043,7 @@ draw_overlay (void)
 	switch (mode)
 	{
 		case MODE_HELP:
-			ovl_page ("MANUAL", 0);
+			ovl_page (NULL, 0);
 			draw_man_buttons (0);
 			break;
 		case MODE_CONFIRM:
@@ -2059,8 +2075,8 @@ draw_overlay (void)
 			draw_ovl_replies ();
 			break;
 		case MODE_TALK:
-			button (4, 216, 96, 22, "<< REPLAY", ACT_REPLAY, 0, 0, 0, 0);
-			button (220, 216, 96, 22, "SKIP >>", ACT_SKIP, 0, 0, 0, 0);
+			button (6, 206, 96, 28, "<< REPLAY", ACT_REPLAY, 0, 0, 0, 0);
+			button (218, 206, 96, 28, "SKIP >>", ACT_SKIP, 0, 0, 0, 0);
 			break;
 		case MODE_NAV:
 			if (map_open)
