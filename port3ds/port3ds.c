@@ -424,6 +424,7 @@ static volatile int apt_returned = 0;
 static void draw_home_note (void);
 static void draw_confirm (int ox);
 static void do_action (int act, int arg, int px, int py);
+static void draw_port_menu (int ox, int y0);
 
 /* ---- touch regions, rebuilt on every draw ---- */
 enum {
