@@ -59,7 +59,7 @@ ZL puts the game on the top screen instead, with stereo 3D, and turns the touch 
 | X | Special action in some menus.
 | Pad | D-pad, Circle Pad and C-stick: move, steer, turn.
 | L and R | Page up and down in lists, zoom the starmap.
-| START | Pause.
+| START | Port menu: Resume, Manual, Left hand, Exit game. The game's own pause is the II button.
 | SELECT | In combat: retreat (when allowed). When typing: cancel.
 | Hold SELECT | Quit: ends a Super Melee battle, or leaves the game for the main menu. Asks first, with big buttons on the touch screen.
 | ZL | Swap the two screens.

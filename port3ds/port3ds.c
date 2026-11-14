@@ -159,18 +159,20 @@ read_small_file (const char *path, char *buf, int size)
 
 #define RGB(r, g, b) ((u32) (((r) << 24) | ((g) << 16) | ((b) << 8) | 0xFF))
 
-#define COL_BG        RGB (0x07, 0x0A, 0x14)
-#define COL_HEADER    RGB (0x10, 0x24, 0x3A)
-#define COL_ACCENT    RGB (0x5F, 0xD3, 0xE6)
-#define COL_TEXT      RGB (0xE6, 0xEE, 0xF5)
-#define COL_DIM       RGB (0x7F, 0x8F, 0xA6)
-#define COL_CHIP      RGB (0x22, 0x32, 0x4A)
-#define COL_BTN       RGB (0x13, 0x22, 0x37)
-#define COL_BTN_EDGE  RGB (0x3A, 0x6C, 0x8C)
-#define COL_BTN_DOWN  RGB (0x2E, 0x5E, 0x80)
-#define COL_HOT       RGB (0xF2, 0xB1, 0x34)
-#define COL_HOT_TEXT  RGB (0x1A, 0x12, 0x02)
-#define COL_OFF       RGB (0x3C, 0x46, 0x55)
+/* the house palette shared by all of Ryan's 3DS ports (claude/3ds-look-and-feel.md) */
+#define COL_BG        RGB (8, 12, 40)
+#define COL_HEADER    RGB (40, 56, 120)
+#define COL_ACCENT    RGB (255, 204, 64)
+#define COL_TEXT      RGB (240, 240, 240)
+#define COL_DIM       RGB (150, 150, 165)
+#define COL_CHIP      RGB (20, 30, 70)
+#define COL_BTN       RGB (40, 56, 120)
+#define COL_BTN_EDGE  RGB (120, 150, 230)
+#define COL_BTN_DOWN  RGB (220, 180, 60)
+#define COL_HOT       RGB (255, 204, 64)
+#define COL_HOT_TEXT  RGB (8, 12, 40)
+#define COL_HINTBG    RGB (4, 6, 20)
+#define COL_OFF       RGB (80, 84, 110)
 
 #define DECK_MAX_W 400
 #define DECK_H     240
@@ -421,6 +423,7 @@ static u64 home_note_until = 0;
 static volatile int apt_returned = 0;
 static void draw_home_note (void);
 static void draw_confirm (int ox);
+static void do_action (int act, int arg, int px, int py);
 
 /* ---- touch regions, rebuilt on every draw ---- */
 enum {
@@ -429,7 +432,7 @@ enum {
 	ACT_REPLY, ACT_REPLY_MORE, ACT_SKIP, ACT_REPLAY,
 	ACT_MAP, ACT_GO, ACT_ZOOM_IN, ACT_ZOOM_OUT, ACT_SHIP, ACT_SHORTCUT,
 	ACT_MENU, ACT_PICK, ACT_NET, ACT_GAME, ACT_TAB_MENU, ACT_TAB_MAP, ACT_MAP_CLOSE,
-	ACT_MELEE_OPT, ACT_MELEE_SLOT, ACT_MELEE_SHIP, ACT_MELEE_CANCEL, ACT_CONFIRM
+	ACT_MELEE_OPT, ACT_MELEE_SLOT, ACT_MELEE_SHIP, ACT_MELEE_CANCEL, ACT_CONFIRM, ACT_PORT
 };
 typedef struct { short x, y, w, h; short act, arg; } Region;
 static Region regions[64];
@@ -520,7 +523,7 @@ button (int x, int y, int w, int h, const char *label, int act, int arg,
 	const int pressed = touch_live && touch_act == act && touch_arg == arg;
 	const u32 edge = hot ? COL_HOT : COL_BTN_EDGE;
 	const u32 bg = hot ? COL_HOT : (pressed ? COL_BTN_DOWN : COL_BTN);
-	const u32 fg = hot ? COL_HOT_TEXT : (disabled ? COL_OFF : COL_TEXT);
+	const u32 fg = (hot || pressed) ? COL_HOT_TEXT : (disabled ? COL_OFF : COL_TEXT);
 	box (x, y, w, h, edge, COL_BG);
 	box (x + 1, y + 1, w - 2, h - 2, bg, edge);
 	if (!big && text_w (label, 0) > w - 4)
@@ -888,20 +891,20 @@ typedef struct { const char *chip; const char *what; } Legend;
 
 static const Legend legend_menu[] = {
 	{"A", "Select"}, {"B", "Back"}, {"PAD", "Move"}, {"L / R", "Page up/down"},
-	{"X", "Special"}, {"START", "Pause"}, {NULL, NULL} };
+	{"X", "Special"}, {"START", "Menu"}, {NULL, NULL} };
 static const Legend legend_combat[] = {
 	{"A", "Fire weapon"}, {"B", "Special"}, {"Y / UP", "Thrust"},
-	{"PAD", "Turn"}, {"SELECT", "Retreat"}, {"START", "Pause"},
+	{"PAD", "Turn"}, {"SELECT", "Retreat"}, {"START", "Menu"},
 	{"HOLD SELECT", "Quit"}, {NULL, NULL} };
 static const Legend legend_flight[] = {
 	{"PAD", "Steer"}, {"Y / UP", "Thrust"}, {"B", "Ship menu"},
-	{"A", "Select"}, {"START", "Pause"}, {"HOLD SELECT", "Quit"}, {NULL, NULL} };
+	{"A", "Select"}, {"START", "Menu"}, {"HOLD SELECT", "Quit"}, {NULL, NULL} };
 static const Legend legend_talk[] = {
 	{"B", "Skip speech"}, {"RIGHT", "Fast-forward"}, {"LEFT", "Replay line"},
-	{"START", "Pause"}, {"HOLD SELECT", "Quit"}, {NULL, NULL} };
+	{"START", "Menu"}, {"HOLD SELECT", "Quit"}, {NULL, NULL} };
 static const Legend legend_starbase[] = {
 	{"PAD", "Move"}, {"A", "Select"}, {"B", "Back"}, {"UP/DOWN", "Buy / sell"},
-	{"START", "Pause"}, {"HOLD SELECT", "Quit"}, {NULL, NULL} };
+	{"START", "Menu"}, {"HOLD SELECT", "Quit"}, {NULL, NULL} };
 static const Legend legend_text[] = {
 	{"UP/DOWN", "Pick letter"}, {"LEFT/RIGHT", "Move"},
 	{"A", "Done"}, {"SELECT", "Cancel"}, {NULL, NULL} };
@@ -939,7 +942,9 @@ draw_legend_list (int ox, const Legend *lg, int y0)
 
 /* ---- the deck ---- */
 enum { MODE_LEGEND, MODE_NAV, MODE_REPLIES, MODE_TALK, MODE_TEXT, MODE_HELP,
-	MODE_MENU, MODE_MELEE, MODE_PICK, MODE_NET, MODE_CONFIRM };
+	MODE_MENU, MODE_MELEE, MODE_PICK, MODE_NET, MODE_CONFIRM, MODE_PORT };
+/* the START port menu (same in every port): RESUME / MANUAL / LEFT HAND / EXIT GAME */
+static int pmenu_on = 0, pmenu_quit = 0, pmenu_focus = 0;
 static int confirm_on = 0, confirm_resp = 0;
 static Port3DSNetDlg netdlg;
 static int netdlg_on = 0;
@@ -959,6 +964,8 @@ deck_mode (void)
 {
 	if (help_page >= 0)
 		return MODE_HELP;
+	if (pmenu_on)
+		return MODE_PORT;
 	if (confirm_on)
 		return MODE_CONFIRM;
 	if (char_mode)
@@ -987,6 +994,7 @@ mode_title (int mode)
 	{
 		case MODE_HELP: return "MANUAL";
 		case MODE_CONFIRM: return "QUIT";
+		case MODE_PORT: return pmenu_quit ? "EXIT GAME" : "MENU";
 		case MODE_TEXT: return "ENTER A NAME";
 		case MODE_REPLIES: return "YOUR REPLY";
 		case MODE_TALK: return "ENCOUNTER";
@@ -1639,6 +1647,9 @@ draw_deck (void)
 		case MODE_CONFIRM:
 			draw_confirm (ox);
 			break;
+		case MODE_PORT:
+			draw_port_menu (ox, 34);
+			break;
 		case MODE_TEXT:
 			draw_legend_list (ox, legend_text, 42);
 			button (ox + 30, 120, 260, 56, "OPEN KEYBOARD", ACT_KEYBOARD, 0, 1, 0, 1);
@@ -1869,8 +1880,12 @@ draw_dashboard (void)
 		snprintf (buf, sizeof buf, "%lu fps  %lu.%lu ms", (unsigned long) stat_fps,
 				(unsigned long) (stat_us / 1000), (unsigned long) ((stat_us % 1000) / 100));
 	else
-		snprintf (buf, sizeof buf, "ZL swap screens  ZR help");
+		buf[0] = 0;
 	text (394 - text_w (buf, 0), 5, buf, COL_DIM, 0);
+	/* the hint strip: same place in every port, always shown */
+	fill (0, 224, 400, 16, COL_HINTBG);
+	text_center (0, 226, 400, mode == MODE_PORT ? "D-pad choose   A press   B / START close"
+			: "START menu   ZL swap screens   ZR manual", COL_ACCENT, 0);
 
 	if (mode == MODE_HELP)
 	{
@@ -1912,6 +1927,52 @@ draw_dashboard (void)
 }
 
 /* ---- overlay (bottom, over the game) ---- */
+
+/* the START port menu (ox: left edge), focus ring in gold, D-pad moves it */
+static void
+draw_port_menu (int ox, int y0)
+{
+	static const char *const items[] = { "RESUME", "MANUAL", "LEFT HAND", "EXIT GAME" };
+	int i, n, y;
+	if (pmenu_quit)
+	{
+		text_center (ox, y0 + 18, 320, "Leave the game?", COL_TEXT, 1);
+		text_center (ox, y0 + 40, 320, "Anything not saved is lost.", COL_DIM, 0);
+		for (i = 0; i < 2; ++i)
+		{	/* 0 = NO (focus starts here), 1 = YES */
+			const int bx = ox + (i ? 20 : 170);
+			if (pmenu_focus == i)
+				box (bx - 3, y0 + 70 - 3, 130 + 6, 44 + 6, COL_HOT, COL_BG);
+			button (bx, y0 + 70, 130, 44, i ? "YES" : "NO", ACT_PORT, 10 + i, 0, 0, 1);
+		}
+		return;
+	}
+	n = (int) (sizeof items / sizeof items[0]);
+	y = y0 + 8;
+	for (i = 0; i < n; ++i, y += 40)
+	{
+		char lab[24];
+		snprintf (lab, sizeof lab, "%s%s", items[i], i == 2 ? (lefty ? ": ON" : ": OFF") : "");
+		if (pmenu_focus == i)
+			box (ox + 37, y - 3, 246 + 6, 32 + 6, COL_HOT, COL_BG);
+		button (ox + 40, y, 240, 32, lab, ACT_PORT, i, i == 2 && lefty, 0, 1);
+	}
+}
+
+static void
+port_menu_act (int a)
+{
+	switch (a)
+	{
+		case 0: pmenu_on = 0; break;
+		case 1: pmenu_on = 0; man_open (); break;
+		case 2: do_action (ACT_LEFTY, 0, 0, 0); break;
+		case 3: pmenu_quit = 1; pmenu_focus = 0; break;
+		case 10: pmenu_quit = 0; pmenu_focus = 3; break;
+		case 11: close_now (); break;
+	}
+	deck_dirty = 1;
+}
 
 /* the game's "really quit?" window, as two big buttons (ox: left edge) */
 static void
@@ -2059,6 +2120,10 @@ draw_overlay (void)
 		case MODE_CONFIRM:
 			ovl_page ("QUIT", 0);
 			draw_confirm (0);
+			break;
+		case MODE_PORT:
+			ovl_page (pmenu_quit ? "EXIT GAME" : "MENU", 0);
+			draw_port_menu (0, 34);
 			break;
 		case MODE_TEXT:
 			button (40, 96, 240, 48, "OPEN KEYBOARD", ACT_KEYBOARD, 0, 1, 0, 1);
@@ -2849,6 +2914,7 @@ do_action (int act, int arg, int px, int py)
 			break;
 		case ACT_MELEE_CANCEL: melee_pick_side = melee_pick_slot = -1; break;
 		case ACT_CONFIRM: port3ds_confirm_act (arg); break;
+		case ACT_PORT: port_menu_act (arg); break;
 	}
 	deck_dirty = 1;
 }
@@ -2966,6 +3032,39 @@ port3ds_pump_input (void)
 	kheld = lefty_remap (hidKeysHeld ());
 	kup = lefty_remap (hidKeysUp ());
 
+	/* START: the port menu (the game's pause stays on the II button) */
+	if ((kdown & KEY_START) && help_page < 0 && !confirm_on && !char_mode)
+	{
+		pmenu_on = !pmenu_on;
+		pmenu_quit = 0;
+		pmenu_focus = 0;
+		deck_dirty = 1;
+		kdown &= ~KEY_START;
+	}
+	else if (pmenu_on && help_page < 0)
+	{
+		const int n = pmenu_quit ? 2 : 4;
+		if (kdown & KEY_B)
+		{
+			if (pmenu_quit) port_menu_act (10);
+			else pmenu_on = 0;
+			deck_dirty = 1;
+		}
+		else if (kdown & KEY_A)
+			port_menu_act (pmenu_quit ? 10 + pmenu_focus : pmenu_focus);
+		else if (kdown & (pmenu_quit ? (KEY_DLEFT | KEY_DRIGHT | KEY_DUP | KEY_DDOWN) : (KEY_DUP | KEY_DLEFT)))
+		{
+			pmenu_focus = pmenu_quit ? !pmenu_focus : (pmenu_focus + n - 1) % n;
+			deck_dirty = 1;
+		}
+		else if (!pmenu_quit && (kdown & (KEY_DDOWN | KEY_DRIGHT)))
+		{
+			pmenu_focus = (pmenu_focus + 1) % n;
+			deck_dirty = 1;
+		}
+	}
+	kheld &= ~KEY_START;
+
 	/* port hotkeys */
 	if (kdown & KEY_ZL)
 		toggle_layout ();
@@ -3009,7 +3108,12 @@ port3ds_pump_input (void)
 
 	/* buttons -> keys */
 	v = read_virtual_keys (kheld);
-	if (help_page >= 0)
+	if (pmenu_on && help_page < 0)
+	{
+		v = 0;
+		steer_stop ();
+	}
+	else if (help_page >= 0)
 	{	/* reading the manual: the buttons are its own, the game gets none */
 		/* the standard for all the 3DS ports: Circle Pad and C-stick scroll
 		 * (hold to keep going), the D-pad moves between the section buttons,
