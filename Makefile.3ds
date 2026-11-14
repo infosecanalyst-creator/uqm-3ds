@@ -21,7 +21,7 @@ include $(PORT)/sources.mk
 CC := arm-none-eabi-gcc
 
 SRCS := $(addprefix $(UQM)/src/,$(UQM_SOURCES)) \
-        $(PORT)/port3ds.c $(PORT)/threads3ds.c $(PORT)/game3ds.c
+        $(PORT)/port3ds.c $(PORT)/threads3ds.c $(PORT)/game3ds.c $(PORT)/selftest.c
 OBJS := $(patsubst %.c,$(OBJDIR)/%.o,$(SRCS))
 
 ARCH   := -march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft
@@ -38,6 +38,10 @@ CFLAGS := -std=gnu11 -O2 -fomit-frame-pointer -ffunction-sections -fdata-section
           -I$(PORTLIBS)/include -I$(PORTLIBS)/include/SDL -I$(CTRULIB)/include
 LDFLAGS := -specs=3dsx.specs $(ARCH) -Wl,--gc-sections -Wl,-Map,$(TARGET).map \
            -L$(PORTLIBS)/lib -L$(CTRULIB)/lib
+# Hardware test hooks (3ds-test-suite hwtest/selftest): inactive unless the test agent
+# starts the game with --selftest=<script>.
+SELFTEST_WRAP := hidScanInput hidKeysHeld hidKeysDown hidKeysDownRepeat hidKeysUp hidTouchRead hidCircleRead irrstCstickRead aptMainLoop
+LDFLAGS += $(foreach f,$(SELFTEST_WRAP),-Wl,--wrap=$(f))
 LIBS    := -lSDL -lvorbisidec -logg -lpng -lz -lcitro3d -lctru -lm
 
 all: $(TARGET).3dsx
