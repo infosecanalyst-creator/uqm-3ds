@@ -24,6 +24,7 @@
 #include "uqm/supermelee/melee.h"
 #include "uqm/supermelee/meleesetup.h"
 #include "uqm/supermelee/meleeship.h"
+#include "uqm/save.h"
 #ifdef NETPLAY
 #include "uqm/supermelee/netplay/netmelee.h"
 #endif
@@ -152,12 +153,49 @@ port3ds_request_course (int ux, int uy)
 
 static void apply_menu_pick (void *input_state);
 
+/* ---- EXIT GAME's suspend save (rule 17) -----------------------------------
+ * Ryan, Nov 19 2026: "Reserve the last slot". EXIT GAME saves into the last of
+ * the 50 save slots ("uqmsave.49", shown as slot 50, named "Exit save"), only in
+ * flight (hyperspace / quasispace or a star system, nothing starting) and never in
+ * Super Melee: where the game's own menu could save. Asked from the main thread,
+ * done here on the game thread. 0 none, 1 asked, 2 saved, 3 not possible here. */
+static volatile int suspend_req = 0;
+
+static int
+suspend_ok (void)
+{
+	const BYTE act = LOBYTE (GLOBAL (CurrentActivity));
+	if (port3ds_in_melee ())
+		return 0;
+	if (act != IN_HYPERSPACE && act != IN_INTERPLANETARY)
+		return 0;
+	if (GLOBAL (CurrentActivity) & (START_ENCOUNTER | START_INTERPLANETARY | CHECK_ABORT | CHECK_LOAD))
+		return 0;
+	return 1;
+}
+
+static int
+do_suspend_save (void)
+{
+	SUMMARY_DESC desc;
+	if (!suspend_ok ())
+		return 0;
+	memset (&desc, 0, sizeof desc);
+	return SaveGame (49, &desc, "Exit save") ? 1 : 0;
+}
+
+int port3ds_suspend_save_possible (void) { return suspend_ok (); }
+void port3ds_request_suspend_save (void) { suspend_req = 1; }
+int port3ds_suspend_save_state (void) { return suspend_req; }
+
 void
 port3ds_game_frame (void *input_state)
 {
 	while (port3ds_manual_active)       /* reading the manual: the game waits */
 		SleepThread (ONE_SECOND / 20);
 	apply_menu_pick (input_state);
+	if (suspend_req == 1)
+		suspend_req = do_suspend_save () ? 2 : 3;
 	if (course_pending)
 	{
 		course_pending = 0;

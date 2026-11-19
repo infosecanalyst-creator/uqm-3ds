@@ -171,6 +171,10 @@ void port3ds_depth_mark_line (SDL_Surface *dst, int x1, int y1, int x2, int y2);
 void port3ds_set_main_screen (SDL_Surface *main);
 extern int port3ds_stereo_ok;             /* no fade or transition this frame */
 void port3ds_game_frame (void *input_state);   /* DoInput, before the InputFunc */
+/* EXIT GAME's suspend save into the last slot (rule 17): asked here, done on the game thread */
+int port3ds_suspend_save_possible (void);
+void port3ds_request_suspend_save (void);
+int port3ds_suspend_save_state (void);   /* 0 none, 1 asked, 2 saved, 3 not possible */
 
 /* comm.c PlayerResponseInput(), game thread, once per frame while the
  * player is choosing: publishes the replies, returns a reply tapped on

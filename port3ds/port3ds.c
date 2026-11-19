@@ -419,6 +419,7 @@ static void open_keyboard (void);
 static void set_backlight (int off);
 static void apt_events (void);
 static void close_now (void);
+static void apt_log (const char *what);
 static u64 home_note_until = 0;
 static volatile int apt_returned = 0;
 static void draw_home_note (void);
@@ -946,6 +947,8 @@ enum { MODE_LEGEND, MODE_NAV, MODE_REPLIES, MODE_TALK, MODE_TEXT, MODE_HELP,
 	MODE_MENU, MODE_MELEE, MODE_PICK, MODE_NET, MODE_CONFIRM, MODE_PORT };
 /* the START port menu (same in every port): RESUME / MANUAL / LEFT HAND / EXIT GAME */
 static int pmenu_on = 0, pmenu_quit = 0, pmenu_focus = 0;
+static int pm_saving = 0;            /* EXIT GAME: waiting for the slot-50 save */
+static u64 pm_save_t0;
 static int confirm_on = 0, confirm_resp = 0;
 static Port3DSNetDlg netdlg;
 static int netdlg_on = 0;
@@ -1937,8 +1940,13 @@ draw_port_menu (int ox, int y0)
 	int i, n, y;
 	if (pmenu_quit)
 	{
+		if (pm_saving)
+		{
+			text_center (ox, y0 + 60, 320, "Saving to slot 50...", COL_TEXT, 1);
+			return;
+		}
 		text_center (ox, y0 + 18, 320, "Leave the game?", COL_TEXT, 1);
-		text_center (ox, y0 + 40, 320, "Anything not saved is lost.", COL_DIM, 0);
+		text_center (ox, y0 + 40, 320, port3ds_suspend_save_possible () ? "Saved first to slot 50 (Exit save)." : "Anything not saved is lost.", COL_DIM, 0);
 		for (i = 0; i < 2; ++i)
 		{	/* 0 = NO (focus starts here), 1 = YES */
 			const int bx = ox + (i ? 20 : 170);
@@ -1970,7 +1978,16 @@ port_menu_act (int a)
 		case 2: do_action (ACT_LEFTY, 0, 0, 0); break;
 		case 3: pmenu_quit = 1; pmenu_focus = 0; break;
 		case 10: pmenu_quit = 0; pmenu_focus = 3; break;
-		case 11: close_now (); break;
+		case 11:
+			if (port3ds_suspend_save_possible ())
+			{	/* rule 17: the game thread saves into slot 50 first; the frame loop closes after */
+				port3ds_request_suspend_save ();
+				pm_save_t0 = svcGetSystemTick ();
+				pm_saving = 1;
+			}
+			else
+				close_now ();
+			break;
 	}
 	deck_dirty = 1;
 }
@@ -3026,6 +3043,17 @@ port3ds_pump_input (void)
 	{	/* back from the HOME menu or sleep: redraw both screens */
 		apt_returned = 0;
 		relayout ();
+	}
+
+	if (pm_saving)
+	{	/* EXIT GAME: close once the game thread has saved to slot 50 (or after 15 s) */
+		const int st = port3ds_suspend_save_state ();
+		if (st != 1 || svcGetSystemTick () - pm_save_t0 > 15ULL * SYSCLOCK_ARM11)
+		{
+			apt_log (st == 2 ? "exit save to slot 50: saved" : "exit save to slot 50: not saved");
+			close_now ();
+		}
+		deck_dirty = 1;
 	}
 
 	hidScanInput ();
