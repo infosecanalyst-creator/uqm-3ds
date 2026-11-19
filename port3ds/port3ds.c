@@ -1955,7 +1955,7 @@ draw_port_menu (int ox, int y0)
 		char lab[24];
 		snprintf (lab, sizeof lab, "%s%s", items[i], i == 2 ? (lefty ? ": ON" : ": OFF") : "");
 		if (pmenu_focus == i)
-			box (ox + 37, y - 3, 246 + 6, 32 + 6, COL_HOT, COL_BG);
+			box (ox + 37, y - 3, 240 + 6, 32 + 6, COL_HOT, COL_BG);
 		button (ox + 40, y, 240, 32, lab, ACT_PORT, i, i == 2 && lefty, 0, 1);
 	}
 }
