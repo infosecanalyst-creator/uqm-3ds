@@ -19,7 +19,9 @@ jobs:
       - name: Build
         run: make -f Makefile.3ds -j"$(nproc)"
       - uses: actions/upload-artifact@v4
-        continue-on-error: true   # a full artifact quota must never fail the build (delivery is the builds branch)
+        continue-on-error: true
         with:
           name: uqm-3ds
-          path: uqm.3dsx
+          path: |
+            uqm.3dsx
+            uqm.elf
