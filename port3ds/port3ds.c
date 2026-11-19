@@ -1827,6 +1827,13 @@ draw_dash_flight (void)
 		fmt_fuel (name, sizeof name, need);
 		snprintf (buf, sizeof buf, "FUEL  %s", name);
 		text (px, y, buf, need > ship.fuel ? RGB (0xFF, 0x58, 0x58) : COL_TEXT, 0);
+		if (need > ship.fuel)
+		{	/* UI rule 20: a word as well as the red */
+			y += 13;
+			fmt_fuel (name, sizeof name, need - ship.fuel);
+			snprintf (buf, sizeof buf, "SHORT %s", name);
+			text (px, y, buf, RGB (0xFF, 0x58, 0x58), 0);
+		}
 		y += 18;
 	}
 	else
