@@ -9,7 +9,7 @@ static const char manual_builtin[] =
 	"\n"
 	"## Reading this manual\n"
 	"- Tap a section on the touch screen to open it.\n"
-	"- Circle Pad or C-stick: scroll. Hold to keep scrolling.\n"
+	"- Circle Pad or C-stick: scroll. Hold to keep scrolling. You can also drag the stylus up or down on the touch screen.\n"
 	"- D-pad: move between the section buttons.\n"
 	"- L and R: previous and next section.\n"
 	"- B, Start or ZR: close. The game waits while you read, and the manual opens again where you left it.\n"

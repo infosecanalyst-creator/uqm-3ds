@@ -2938,6 +2938,7 @@ do_action (int act, int arg, int px, int py)
 }
 
 static int drag_x0, drag_y0, drag_last_x, drag_last_y, dragging;
+static float man_mom;   /* manual drag momentum, px per frame */
 
 static void
 handle_touch (u32 down, u32 held, u32 up)
@@ -3001,6 +3002,19 @@ handle_touch (u32 down, u32 held, u32 up)
 				drag_last_y = tp.py;
 				deck_dirty = 1;
 			}
+		}
+		else if (help_page >= 0 && (dragging
+				|| abs (tp.px - drag_x0) > 6 || abs (tp.py - drag_y0) > 6))
+		{	/* the manual: a touch that moves drags the text (rule 13), a 13 px
+			 * line at a time, and presses nothing */
+			static int acc;
+			if (!dragging) { dragging = 1; acc = 0; touch_live = 0; }
+			acc += drag_last_y - tp.py;
+			man_mom = (float) (drag_last_y - tp.py);
+			while (acc >= 13) { man_scroll_by (1); acc -= 13; }
+			while (acc <= -13) { man_scroll_by (-1); acc += 13; }
+			drag_last_y = tp.py;
+			deck_dirty = 1;
 		}
 		else
 		{	/* slid off the button: disarm */
@@ -3182,6 +3196,17 @@ port3ds_pump_input (void)
 			next_scroll = now + 60;
 		}
 		last_sd = sd;
+		if (!(kheld & KEY_TOUCH) && (man_mom > 0.5f || man_mom < -0.5f))
+		{	/* coast a little after a drag */
+			static float acc;
+			acc += man_mom * 2.0f;
+			man_mom *= 0.88f;
+			while (acc >= 13) { man_scroll_by (1); acc -= 13; }
+			while (acc <= -13) { man_scroll_by (-1); acc += 13; }
+			if (man_mom < 0.5f && man_mom > -0.5f) acc = 0;
+		}
+		else if (kheld & KEY_TOUCH)
+			man_mom = dragging ? man_mom : 0;
 		v = 0;
 		steer_stop ();
 	}
