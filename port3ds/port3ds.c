@@ -419,6 +419,7 @@ static void open_keyboard (void);
 static void set_backlight (int off);
 static void apt_events (void);
 static void close_now (void);
+static volatile int port3ds_closing = 0;   /* set when the port shuts down */
 static void apt_log (const char *what);
 static u64 home_note_until = 0;
 static volatile int apt_returned = 0;
@@ -2648,6 +2649,8 @@ port3ds_present (SDL_Surface *frame)
 	u16 fw, fh;
 	u32 *fb;
 
+	if (port3ds_closing)
+		return;                   /* the port is shutting down: no more drawing */
 	if (!frame || (help_page >= 0 && scr == GFX_TOP))
 		return;
 	/* UQM redraws as fast as its main loop spins during fades (hundreds of
@@ -3618,12 +3621,18 @@ close_now (void)
 	if (!once++)
 		apt_log ("closed from the HOME menu");
 #ifndef UQM3DS_HARNESS
+	port3ds_closing = 1;
 	net_stop ();
 	ndspExit ();
 	if (lcd_ok)
 		gspLcdExit ();
 	gfxExit ();
-	_exit (0);
+	/* Not _exit(): that unmounts the SD card while the game's own thread may still be
+	 * reading from it (the title screen loads pictures all the time), and the thread
+	 * then crashes in lseek on a device that is gone (seen Nov 19 2026). Tell APT we are
+	 * leaving and end the process; the kernel closes every other handle. */
+	aptExit ();
+	svcExitProcess ();
 #endif
 }
 
