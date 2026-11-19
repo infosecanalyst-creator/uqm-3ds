@@ -25,3 +25,4 @@ jobs:
           path: |
             uqm.3dsx
             uqm.elf
+            uqm.map
