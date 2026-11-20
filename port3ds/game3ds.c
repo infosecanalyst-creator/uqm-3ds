@@ -181,7 +181,21 @@ do_suspend_save (void)
 	if (!suspend_ok ())
 		return 0;
 	memset (&desc, 0, sizeof desc);
-	return SaveGame (49, &desc, "Exit save") ? 1 : 0;
+	{	/* UQ-03: upstream writes slot 50 in place and deletes it when a write fails,
+		   so keep the previous exit save as uqmsave.49.bak and put it back on failure */
+		static const char *const cur = PORT3DS_ROOT "/save/uqmsave.49";
+		static const char *const bak = PORT3DS_ROOT "/save/uqmsave.49.bak";
+		int ok, had;
+		remove (bak);
+		had = rename (cur, bak) == 0;
+		ok = SaveGame (49, &desc, "Exit save") ? 1 : 0;
+		if (!ok && had)
+		{
+			remove (cur);
+			rename (bak, cur);
+		}
+		return ok;
+	}
 }
 
 int port3ds_suspend_save_possible (void) { return suspend_ok (); }

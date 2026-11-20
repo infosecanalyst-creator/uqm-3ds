@@ -442,4 +442,12 @@ rw("libs/network/netmanager/netmanager_bsd.c",
 rw("libs/network/netmanager/netmanager_bsd.c", '#include "netmanager_bsd.h"\n',
    '#include "netmanager_bsd.h"\n#ifdef __3DS__\n#\tinclude <unistd.h>\t/* usleep */\n#endif\n', "/* usleep */")
 
+# ---- save.c: a save whose final close fails is a failed save (UQ-02) ---------
+# Upstream ignores uio_fclose()'s result, so the last buffered block can be lost on
+# a full card while the game says it saved.
+rw("uqm/save.c",
+   "\t\tres_CloseResFile (out_fp);\n\t\tif (!io_ok)\n",
+   "#ifdef __3DS__\n\t\tif (uio_fclose (out_fp) != 0) /* UQ-02 */\n\t\t\tio_ok = FALSE;\n#else\n\t\tres_CloseResFile (out_fp);\n#endif\n\t\tif (!io_ok)\n",
+   "/* UQ-02 */")
+
 print(f"patch_uqm: {applied} edits applied, {skipped} already present")
