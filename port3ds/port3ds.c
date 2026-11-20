@@ -1953,6 +1953,19 @@ draw_port_menu (int ox, int y0)
 			text_center (ox, y0 + 60, 320, "Saving to slot 50...", COL_TEXT, 1);
 			return;
 		}
+		if (pmenu_quit == 2)
+		{	/* UQ-01: the exit save failed */
+			text_center (ox, y0 + 18, 320, "Not saved!", COL_TEXT, 1);
+			text_center (ox, y0 + 40, 320, "Exit anyway? Unsaved progress is lost.", COL_DIM, 0);
+			for (i = 0; i < 2; ++i)
+			{	/* 0 = NO (focus starts here), 1 = EXIT ANYWAY */
+				const int bx = ox + (i ? 20 : 170);
+				if (pmenu_focus == i)
+					box (bx - 3, y0 + 70 - 3, 130 + 6, 44 + 6, COL_HOT, COL_BG);
+				button (bx, y0 + 70, 130, 44, i ? "EXIT ANYWAY" : "NO", ACT_PORT, 10 + i, 0, 0, 1);
+			}
+			return;
+		}
 		text_center (ox, y0 + 18, 320, "Leave the game?", COL_TEXT, 1);
 		text_center (ox, y0 + 40, 320, port3ds_suspend_save_possible () ? "Saved first to slot 50 (Exit save)." : "Anything not saved is lost.", COL_DIM, 0);
 		for (i = 0; i < 2; ++i)
@@ -1987,7 +2000,9 @@ port_menu_act (int a)
 		case 3: pmenu_quit = 1; pmenu_focus = 0; break;
 		case 10: pmenu_quit = 0; pmenu_focus = 3; break;
 		case 11:
-			if (port3ds_suspend_save_possible ())
+			if (pmenu_quit == 2)
+				close_now ();   /* EXIT ANYWAY after a failed save */
+			else if (port3ds_suspend_save_possible ())
 			{	/* rule 17: the game thread saves into slot 50 first; the frame loop closes after */
 				port3ds_request_suspend_save ();
 				pm_save_t0 = svcGetSystemTick ();
@@ -3070,12 +3085,22 @@ port3ds_pump_input (void)
 	}
 
 	if (pm_saving)
-	{	/* EXIT GAME: close once the game thread has saved to slot 50 (or after 15 s) */
+	{	/* EXIT GAME: close once the game thread has saved to slot 50. UQ-01: never while
+		   it is writing (4); only a save that never started gives up after 15 s. A save
+		   that failed or never started asks first (pmenu_quit 2) instead of quitting. */
 		const int st = port3ds_suspend_save_state ();
-		if (st != 1 || svcGetSystemTick () - pm_save_t0 > 15ULL * SYSCLOCK_ARM11)
+		const int stalled = st == 1 && svcGetSystemTick () - pm_save_t0 > 15ULL * SYSCLOCK_ARM11;
+		if (st == 2)
 		{
-			apt_log (st == 2 ? "exit save to slot 50: saved" : "exit save to slot 50: not saved");
+			apt_log ("exit save to slot 50: saved");
 			close_now ();
+		}
+		else if (st == 3 || stalled)
+		{
+			apt_log ("exit save to slot 50: not saved, asking");
+			pm_saving = 0;
+			pmenu_quit = 2;
+			pmenu_focus = 0;
 		}
 		deck_dirty = 1;
 	}
@@ -3086,6 +3111,8 @@ port3ds_pump_input (void)
 	kup = lefty_remap (hidKeysUp ());
 
 	/* START: the port menu (the game's pause stays on the II button) */
+	if (pm_saving)
+		kdown = 0;   /* saving for EXIT GAME: no input until it is done */
 	if ((kdown & KEY_START) && help_page < 0 && !confirm_on && !char_mode)
 	{
 		pmenu_on = !pmenu_on;

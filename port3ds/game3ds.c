@@ -158,7 +158,7 @@ static void apply_menu_pick (void *input_state);
  * the 50 save slots ("uqmsave.49", shown as slot 50, named "Exit save"), only in
  * flight (hyperspace / quasispace or a star system, nothing starting) and never in
  * Super Melee: where the game's own menu could save. Asked from the main thread,
- * done here on the game thread. 0 none, 1 asked, 2 saved, 3 not possible here. */
+ * done here on the game thread. 0 none, 1 asked, 4 writing, 2 saved, 3 not saved. */
 static volatile int suspend_req = 0;
 
 static int
@@ -195,7 +195,10 @@ port3ds_game_frame (void *input_state)
 		SleepThread (ONE_SECOND / 20);
 	apply_menu_pick (input_state);
 	if (suspend_req == 1)
+	{	/* UQ-01: 4 = writing, so the main thread never closes in the middle of it */
+		suspend_req = 4;
 		suspend_req = do_suspend_save () ? 2 : 3;
+	}
 	if (course_pending)
 	{
 		course_pending = 0;
