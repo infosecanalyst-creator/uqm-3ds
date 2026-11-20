@@ -460,7 +460,10 @@ ui_click (void)
 			return;
 		click_pcm = (s16 *) linearAlloc (n * sizeof (s16));
 		if (!click_pcm)
+		{
+			ndspExit ();   /* give the reference back: no click without its buffer */
 			return;
+		}
 		for (i = 0; i < n; i++)
 		{
 			const float t = (float) i / 22050.f;
@@ -489,8 +492,23 @@ ui_click (void)
 		ndspChnWaveBufAdd (23, &click_wb);
 	}
 }
+/* Exit: the click holds its own ndsp reference (ndspInit is reference counted), so the engine
+   closing its audio does not stop the DSP thread. If exit() then frees the heap that thread's
+   stack lives in, it faults in ndspiReadChnState (JA2's exit crash, Nov 20 2026). Drop the
+   click's reference so the thread is gone before the heap is. Once only (click_ok guards). */
+static void
+click_exit (void)
+{
+	if (click_ok != 1)
+		return;
+	click_ok = 0;
+	ndspChnWaveBufClear (23);
+	ndspChnReset (23);
+	ndspExit ();
+}
 #else
 static void ui_click (void) {}
+static void click_exit (void) {}
 #endif
 
 static int touch_act = ACT_NONE, touch_arg = 0;   /* armed on press */
@@ -3772,5 +3790,6 @@ port3ds_exit (void)
 	aptUnhook (&apt_cookie);
 	net_stop ();
 #endif
+	click_exit ();   /* last ndsp reference: the DSP thread must stop before exit() frees the heap */
 	gfxExit ();
 }
