@@ -147,6 +147,7 @@ extern volatile int port3ds_hs_facing;
 
 /* the instruction manual is open: the game waits in port3ds_game_frame */
 extern volatile int port3ds_manual_active;
+extern volatile int port3ds_apt_paused;
 int port3ds_net_live (void);
 int port3ds_in_melee (void);
 void port3ds_net_start (void);

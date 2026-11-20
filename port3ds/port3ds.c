@@ -297,6 +297,7 @@ static int deck_ctx = -1;
 static volatile int char_mode = 0;
 static int help_page = -1;          /* the manual: -1 = closed */
 volatile int port3ds_manual_active = 0;   /* the game waits while it is open */
+volatile int port3ds_apt_paused = 0;      /* HOME menu / sleep: the game thread waits (UQ-05) */
 static int stereo_on;
 static int backlight_off = 0;
 static int show_stats = 0;
@@ -950,6 +951,7 @@ enum { MODE_LEGEND, MODE_NAV, MODE_REPLIES, MODE_TALK, MODE_TEXT, MODE_HELP,
 static int pmenu_on = 0, pmenu_quit = 0, pmenu_focus = 0;
 static int pm_saving = 0;            /* EXIT GAME: waiting for the slot-50 save */
 static u64 pm_save_t0;
+static int pm_home_close = 0;        /* UQ-05: Close was chosen in the HOME menu */
 static int confirm_on = 0, confirm_resp = 0;
 static Port3DSNetDlg netdlg;
 static int netdlg_on = 0;
@@ -3074,9 +3076,30 @@ port3ds_pump_input (void)
 
 	apt_events ();
 	if (!aptMainLoop ())
-	{
-		close_now ();
-		return 0;
+	{	/* UQ-05: Close from the HOME menu (or power off) runs EXIT GAME's guarded save
+		   to slot 50 first, on the game thread as usual; the pm_saving block below closes
+		   when it is saved, failed or (at most 6 s) never started. */
+		static int home_close = 0;
+		if (!home_close)
+		{
+			home_close = 1;
+			port3ds_apt_paused = 0;
+			if (help_page >= 0)
+				man_close ();         /* the game thread waits while the manual is open */
+			if (!pm_saving && port3ds_suspend_save_possible ())
+			{
+				apt_log ("closed from the HOME menu: exit save to slot 50");
+				port3ds_request_suspend_save ();
+				pm_save_t0 = svcGetSystemTick ();
+				pm_saving = 1;
+			}
+		}
+		pm_home_close = 1;
+		if (!pm_saving)
+		{
+			close_now ();
+			return 0;
+		}
 	}
 	if (apt_returned)
 	{	/* back from the HOME menu or sleep: redraw both screens */
@@ -3089,10 +3112,16 @@ port3ds_pump_input (void)
 		   it is writing (4); only a save that never started gives up after 15 s. A save
 		   that failed or never started asks first (pmenu_quit 2) instead of quitting. */
 		const int st = port3ds_suspend_save_state ();
-		const int stalled = st == 1 && svcGetSystemTick () - pm_save_t0 > 15ULL * SYSCLOCK_ARM11;
+		const int stalled = st == 1 && svcGetSystemTick () - pm_save_t0 >
+				(pm_home_close ? 6ULL : 15ULL) * SYSCLOCK_ARM11;
 		if (st == 2)
 		{
 			apt_log ("exit save to slot 50: saved");
+			close_now ();
+		}
+		else if ((st == 3 || stalled) && pm_home_close)
+		{	/* closing from HOME: nobody to ask */
+			apt_log ("exit save to slot 50: not saved, closing");
 			close_now ();
 		}
 		else if (st == 3 || stalled)
@@ -3598,6 +3627,7 @@ apt_hook (APT_HookType hook, void *param)
 		case APTHOOK_ONSUSPEND:
 		case APTHOOK_ONSLEEP:
 			apt_log (hook == APTHOOK_ONSUSPEND ? "to HOME menu" : "to sleep");
+			port3ds_apt_paused = 1;   /* flag only: the game thread stops at its next frame */
 			soc_resume = soc_on;
 			net_stop ();
 			if (backlight_off && lcd_ok)
@@ -3610,6 +3640,7 @@ apt_hook (APT_HookType hook, void *param)
 			if (soc_resume)
 				net_start ();
 			soc_resume = 0;
+			port3ds_apt_paused = 0;
 			apt_returned = 1;
 			break;
 		default:

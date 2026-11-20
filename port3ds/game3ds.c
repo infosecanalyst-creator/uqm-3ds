@@ -205,7 +205,7 @@ int port3ds_suspend_save_state (void) { return suspend_req; }
 void
 port3ds_game_frame (void *input_state)
 {
-	while (port3ds_manual_active)       /* reading the manual: the game waits */
+	while (port3ds_manual_active || port3ds_apt_paused)   /* manual open, HOME menu or sleep: the game waits */
 		SleepThread (ONE_SECOND / 20);
 	apply_menu_pick (input_state);
 	if (suspend_req == 1)
