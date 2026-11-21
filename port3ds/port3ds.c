@@ -45,6 +45,21 @@
 #define PORT_VERSION "unknown"
 #endif
 
+/* A launcher that passes no arguments (the Azahar test emulator does this; the
+ * Homebrew Launcher always passes the path) leaves argc 0 and argv NULL, and
+ * UQM's main() reads argv[0]. Give it the install path instead of a NULL. */
+extern int __system_argc;
+extern char **__system_argv;
+__attribute__((constructor)) static void port3ds_default_argv(void)
+{
+	static char self[] = "sdmc:/3ds/uqm.3dsx";
+	static char *av[] = { self, NULL };
+	if (__system_argc <= 0 || !__system_argv || !__system_argv[0]) {
+		__system_argv = av;
+		__system_argc = 1;
+	}
+}
+
 /* ------------------------------------------------------------------ */
 /* configuration written on first run                                  */
 /* ------------------------------------------------------------------ */
