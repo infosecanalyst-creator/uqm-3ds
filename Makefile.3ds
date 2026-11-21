@@ -31,7 +31,7 @@ ARCH   := -march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft
 # instruction cache better, which matters more here than unrolling.
 CFLAGS := -std=gnu11 -O2 -fomit-frame-pointer -ffunction-sections -fdata-sections \
           -DNETPLAY=NETPLAY_IPV4 \
-          -mword-relocations $(ARCH) -w \
+          -mword-relocations $(ARCH) \
           -D__3DS__ -DARM11 -DNDEBUG -D_GNU_SOURCE \
           -DGFXMODULE_SDL -DSDL_DIR=SDL -DUSE_INTERNAL_MIKMOD -DHAVE_ZIP=1 \
           -DTHREADLIB_SDL -DOVCODEC_TREMOR \
@@ -70,6 +70,11 @@ $(TARGET).smdh: res/icon.png
 
 $(TARGET).3dsx: $(TARGET).elf $(TARGET).smdh
 	3dsxtool $< $@ --smdh=$(TARGET).smdh
+
+# Warnings: the port's own files (port3ds/) build with -Wall and show every warning; the
+# upstream UQM sources keep -w (thousands of old-C warnings that are not ours to fix).
+$(filter-out $(OBJDIR)/$(PORT)/%,$(OBJS)): CFLAGS += -w
+$(filter $(OBJDIR)/$(PORT)/%,$(OBJS)): CFLAGS += -Wall
 
 $(OBJDIR)/%.o: %.c $(FLAGS_STAMP)
 	@mkdir -p $(dir $@)
