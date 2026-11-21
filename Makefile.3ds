@@ -53,6 +53,14 @@ FLAGS_STAMP := $(OBJDIR)/.cflags
 $(shell mkdir -p $(OBJDIR); echo '$(CC) $(CFLAGS)' | cmp -s - $(FLAGS_STAMP) \
 	|| echo '$(CC) $(CFLAGS)' > $(FLAGS_STAMP))
 
+# Port version in the START menu: git describe of uqm-3ds. Only port3ds.o uses it, so a new
+# commit rebuilds that one file (its own stamp), not everything.
+PORT_VERSION ?= $(shell git -c safe.directory='*' describe --always --dirty 2>/dev/null || echo unknown)
+VERSION_STAMP := $(OBJDIR)/.version
+$(shell echo '$(PORT_VERSION)' | cmp -s - $(VERSION_STAMP) || echo '$(PORT_VERSION)' > $(VERSION_STAMP))
+$(OBJDIR)/$(PORT)/port3ds.o: CFLAGS += -DPORT_VERSION=\"$(PORT_VERSION)\"
+$(OBJDIR)/$(PORT)/port3ds.o: $(VERSION_STAMP)
+
 $(TARGET).elf: $(OBJS)
 	$(CC) $(LDFLAGS) $(OBJS) $(LIBS) -o $@
 

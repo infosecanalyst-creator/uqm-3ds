@@ -41,6 +41,9 @@
 #include "font_small.h"
 #include "manual_text.h"
 #include <ctype.h>
+#ifndef PORT_VERSION
+#define PORT_VERSION "unknown"
+#endif
 
 /* ------------------------------------------------------------------ */
 /* configuration written on first run                                  */
@@ -2007,6 +2010,7 @@ draw_port_menu (int ox, int y0)
 			box (ox + 37, y - 3, 240 + 6, 32 + 6, COL_HOT, COL_BG);
 		button (ox + 40, y, 240, 32, lab, ACT_PORT, i, i == 2 && lefty, 0, 1);
 	}
+	text_center (ox, y0 + 170, 320, "Build " PORT_VERSION, COL_DIM, 0);   /* git describe of uqm-3ds */
 }
 
 static void
