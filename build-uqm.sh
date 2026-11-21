@@ -4,7 +4,7 @@
 # First run downloads the UQM 0.8.0 source and game data from SourceForge
 # (~150 MB, kept in downloads/). Every run re-applies the port's patches
 # (idempotent), rebuilds, and leaves:
-#     SD-CARD/3ds/uqm/uqm.3dsx                     (the only copy of the .3dsx)
+#     SD-CARD/3ds/uqm.3dsx                         (the only copy of the .3dsx; on the 3DS: /3ds/uqm.3dsx)
 #     SD-CARD/3ds/uqm/content/packages/*.uqm       (game data, sent once)
 # Then on the PC:  ./install-3ds.sh <3DS IP> uqm
 # (first time also: ./install-3ds.sh <3DS IP> --uqm-data)
@@ -38,7 +38,7 @@ LOG="$HERE/uqm-build.log"; : > "$LOG"
   echo "=== build"
   make -f Makefile.3ds -j"$(nproc)" || { echo "BUILD FAILED"; exit 1; }
   mkdir -p "$SD/content/packages"
-  mv -f uqm.3dsx "$SD/uqm.3dsx" && ls -la "$SD/uqm.3dsx"
+  mv -f uqm.3dsx "$SD/../uqm.3dsx" && ls -la "$SD/../uqm.3dsx"
 
   echo "=== game data"
   P="$SD/content/packages"
@@ -54,7 +54,7 @@ LOG="$HERE/uqm-build.log"; : > "$LOG"
   ls -la "$P"
 
   # Azahar (emulator) reads its own virtual SD card: give it the data too,
-  # then open SD-CARD/3ds/uqm/uqm.3dsx in Azahar with File > Load File.
+  # then open SD-CARD/3ds/uqm.3dsx in Azahar with File > Load File.
   AZ="$(cygpath -u "$APPDATA" 2>/dev/null)/Azahar/sdmc"
   if [ -d "$AZ" ]; then
     mkdir -p "$AZ/3ds/uqm/content/packages" "$AZ/3ds/uqm/content/addons"

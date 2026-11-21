@@ -25,7 +25,7 @@ static const char manual_builtin[] =
 	"Every update after that is the same, without --uqm-data.\n"
 	"\n"
 	"## Game files\n"
-	"- sdmc:/3ds/uqm/uqm.3dsx: the game.\n"
+	"- sdmc:/3ds/uqm.3dsx: the game (directly in /3ds).\n"
 	"- sdmc:/3ds/uqm/content/packages: the game data, plus the 3DO voice and music packs.\n"
 	"- sdmc:/3ds/dspfirm.cdc: the sound firmware every homebrew game needs (run DSP1 once).\n"
 	"\n"

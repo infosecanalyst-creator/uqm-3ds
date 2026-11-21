@@ -23,7 +23,7 @@ The Ur-Quan Masters runs on the New Nintendo 3DS and New 3DS XL.
 Every update after that is the same, without --uqm-data.
 
 ## Game files
-- sdmc:/3ds/uqm/uqm.3dsx: the game.
+- sdmc:/3ds/uqm.3dsx: the game (directly in /3ds).
 - sdmc:/3ds/uqm/content/packages: the game data, plus the 3DO voice and music packs.
 - sdmc:/3ds/dspfirm.cdc: the sound firmware every homebrew game needs (run DSP1 once).
 

@@ -14,15 +14,16 @@ bash build-uqm.sh
 ```
 
 `build-uqm.sh` downloads the UQM source and the free UQM content packages
-from SourceForge and leaves the files to send in `../SD-CARD/3ds/uqm/`.
-`install-3ds.sh` sends them over FTP (needs `curl`; `UQM_SD` and `FTP_PORT`
-override the folder and port 5000).
+from SourceForge and leaves the files to send in `../SD-CARD/3ds/uqm.3dsx` (the game) and
+`../SD-CARD/3ds/uqm/` (the data).
+`install-3ds.sh` sends them over FTP (needs `curl`; `UQM_SD`, `UQM_APP` and `FTP_PORT`
+override the data folder, the .3dsx and port 5000).
 
 Open ftpd on the 3DS first (it shows the IP). Or skip installing a build and
 run it straight from the PC: hold Y in the Homebrew Launcher, then
-`3dslink -a <3DS IP> ../SD-CARD/3ds/uqm/uqm.3dsx`.
+`3dslink -a <3DS IP> ../SD-CARD/3ds/uqm.3dsx`.
 
-On the SD card: `sdmc:/3ds/uqm/uqm.3dsx`, data in `sdmc:/3ds/uqm/content/packages/`,
+On the SD card: `sdmc:/3ds/uqm.3dsx` (directly in `/3ds`), data in `sdmc:/3ds/uqm/content/packages/`,
 saves in `sdmc:/3ds/uqm/save/`, errors in `sdmc:/3ds/uqm/uqm.log`.
 Sound needs `sdmc:/3ds/dspfirm.cdc` (same as every other homebrew with audio).
 
