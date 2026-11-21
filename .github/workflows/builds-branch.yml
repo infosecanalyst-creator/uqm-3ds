@@ -23,6 +23,8 @@ jobs:
           curl -fL --retry 3 -o uqm-src.tgz https://downloads.sourceforge.net/project/sc2/UQM/0.8/uqm-0.8.0-src.tgz
           tar xzf uqm-src.tgz
           python3 tools/patch_uqm.py uqm-0.8.0
+      - name: Manual header matches manual.txt
+        run: python3 tools/embed_manual.py port3ds && git diff --exit-code port3ds/manual_text.h
       - name: Build
         run: make -f Makefile.3ds -j$(nproc) 2>&1 | tee build.log; test -f uqm.3dsx
       - name: Collect

@@ -61,7 +61,7 @@ static const char manual_builtin[] =
 	"| X | Special action in some menus.\n"
 	"| Pad | D-pad, Circle Pad and C-stick: move, steer, turn.\n"
 	"| L and R | Page up and down in lists, zoom the starmap.\n"
-	"| START | Pause.\n"
+	"| START | Port menu: Resume, Manual, Left hand, Exit game. The game's own pause is the II button.\n"
 	"| SELECT | In combat: retreat (when allowed). When typing: cancel.\n"
 	"| Hold SELECT | Quit: ends a Super Melee battle, or leaves the game for the main menu. Asks first, with big buttons on the touch screen.\n"
 	"| ZL | Swap the two screens.\n"

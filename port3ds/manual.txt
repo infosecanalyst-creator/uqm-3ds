@@ -50,7 +50,7 @@ The game fills the touch screen and the stylus plays it.
 You never need to touch it. While flying it shows the galaxy map around your ship, your fuel range, your fuel, money (RU), crew and landers, where you are, and the course you have set. In combat and menus it shows what each button does.
 
 ## Swapping screens: ZL
-ZL puts the game on the top screen instead, with stereo 3D, and turns the touch screen into a control panel: galaxy map, menu buttons, replies and the Super Melee grid. Press ZL again to swap back. The game remembers your choice.
+ZL puts the game on the top screen instead, filling it, with stereo 3D, and turns the touch screen into a control panel: galaxy map, menu buttons, replies and the Super Melee grid. Press ZL again to swap back. The game remembers your choice.
 
 # Controls
 | A | Select. In combat: fire.
