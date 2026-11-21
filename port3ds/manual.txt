@@ -140,7 +140,7 @@ Listen carefully. Most of what you learn in this game, you learn by talking.
 
 # The starbase
 The starbase orbits Earth. Once it is yours you can:
-| Talk to the Commander | Advice, news and missions.
+| Commander | Talk to him: advice, news and missions.
 | Outfit Starship | Buy fuel and modules for your flagship.
 | Shipyard | Hire crew and build escort ships.
 | Depart Starbase | Back to space.
@@ -189,7 +189,7 @@ Stereo 3D works when the game is on the top screen (press ZL), in HyperSpace, so
 Setup (main menu) changes music, speech, subtitles, the menu style (PC or 3DO) and melee zoom. Game, then Settings (ship menu) switches sound and music, sets how fast the computer fights, and renames your captain or ship.
 
 ## Files on the SD card
-| sdmc:/3ds/uqm/save | Your saved games.
+| save/ | Your saved games (in sdmc:/3ds/uqm/).
 | uqm.cfg | The game's settings.
 | port3ds.cfg | Which screen the game is on, FPS and left-handed play. It, like uqm.cfg, is written only when something changed, through a temporary file.
 | uqm.log | Errors and start and exit lines, for bug reports.
