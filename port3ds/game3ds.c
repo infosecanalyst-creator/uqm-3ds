@@ -57,6 +57,11 @@ port3ds_game_context (void)
 	{
 		case IN_INTERPLANETARY:
 		case IN_PLANET_ORBIT:
+			/* no solar system loaded yet: the new-game story slides. No flight
+			   tabs there (hardware: MENU / MAP / II / ? / SWAP covered the
+			   first line of the story text). */
+			if (!pSolarSysState)
+				return CTX3DS_MENU;
 			return CTX3DS_SOLARSYS;
 		case IN_ENCOUNTER:
 			return CTX3DS_ENCOUNTER;
