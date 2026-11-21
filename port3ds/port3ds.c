@@ -136,11 +136,20 @@ file_exists (const char *path)
 static void
 write_file (const char *path, const char *text)
 {
-	FILE *f = fopen (path, "w");
+	/* temp file + checked write/close + rename: a power cut or a full card never
+	 * leaves a half-written config (UQ-08) */
+	char tmp[300];
+	FILE *f;
+	int ok;
+	snprintf (tmp, sizeof tmp, "%s.tmp", path);
+	f = fopen (tmp, "w");
 	if (!f)
 		return;
-	fputs (text, f);
-	fclose (f);
+	ok = fputs (text, f) >= 0;
+	if (fclose (f) != 0)
+		ok = 0;
+	if (!ok || rename (tmp, path) != 0)
+		remove (tmp);
 }
 
 static int
@@ -343,8 +352,12 @@ lefty_remap (u32 m)
 static void
 save_port_settings (void)
 {
+	static char last[64];
 	char buf[64];
 	snprintf (buf, sizeof buf, "screens=%d\nstats=%d\nlefty=%d\n", layout, show_stats, lefty);
+	if (!strcmp (buf, last))
+		return;   /* UQ-08: write only on change */
+	strcpy (last, buf);
 	write_file (PORT3DS_ROOT "/port3ds.cfg", buf);
 }
 
