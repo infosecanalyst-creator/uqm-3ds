@@ -1818,7 +1818,7 @@ draw_dash_flight (void)
 
 	port3ds_game_read (&ship);
 	/* the map follows the ship here; the MAP tab keeps its own view */
-	map_x = 4; map_y = 40; map_w = 250; map_h = 196;
+	map_x = 4; map_y = 40; map_w = 250; map_h = 180;   /* ends at y 220: the footer strip (y 224) stays whole */
 	nav_dash = 1;
 	map_follow = 1;
 	draw_nav (0);
