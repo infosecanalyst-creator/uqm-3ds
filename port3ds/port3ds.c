@@ -1894,7 +1894,7 @@ draw_dash_flight (void)
 	}
 	if (steer_mode)
 		text (px, y, steer_mode == 1 ? "Steering" : "Flying by touch", COL_HOT, 0);
-	y = 172;
+	y = 159;   /* five lines, the last one ends above the footer line (y 226) */
 	text (px, y, "Tap space: fly there", COL_DIM, 0); y += 13;
 	text (px, y, "Hold: steer", COL_DIM, 0); y += 13;
 	text (px, y, "MAP: set a course", COL_DIM, 0); y += 13;
@@ -1923,8 +1923,8 @@ draw_dash_melee (void)
 					sh == 255 ? COL_OFF : COL_TEXT, 0);
 		}
 	}
-	text_center (0, 214, 400, "Touch screen: tap a ship slot to change it,", COL_DIM, 0);
-	text_center (0, 226, 400, "or the buttons on the right of the game", COL_DIM, 0);
+	text_center (0, 188, 400, "Touch screen: tap a ship slot to change it,", COL_DIM, 0);
+	text_center (0, 201, 400, "or the buttons on the right of the game", COL_DIM, 0);
 }
 
 static void

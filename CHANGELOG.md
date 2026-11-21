@@ -2,6 +2,7 @@
 
 ## 2026-11-21
 
+- Top screen: the last help line in flight ("ZL: game on top, 3D") and the Super Melee hint no longer overlap the footer line.
 - The game's settings (uqm.cfg, port3ds.cfg) are written through a temporary file and only when something changed: fewer SD card writes, and a failed write cannot damage them.
 - Quieter touch click.
 
