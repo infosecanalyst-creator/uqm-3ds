@@ -1657,8 +1657,8 @@ draw_man_top (void)
 		fill (394, 28 + (195 - h) * top / max, 3, h, COL_ACCENT);
 	}
 	fill (0, 224, 400, 16, COL_HEADER);
-	text (6, 226, lefty ? "Stick: scroll    A/B/X/Y, L / R: section    D-pad down: close"
-	                    : "Stick: scroll    D-pad, L / R: section    B: close", COL_DIM, 0);
+	text (6, 226, lefty ? "Sticks: scroll   A/B/X/Y, L / R: section   D-Down / START: close"
+	                    : "Sticks: scroll   D-Pad, L / R: section   B / START: close", COL_DIM, 0);
 }
 
 /* the choosing side: a button per section */
