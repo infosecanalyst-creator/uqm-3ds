@@ -2,6 +2,8 @@
 
 *Not affiliated with or endorsed by Stardock, Toys for Bob or Nintendo. Star Control is a trademark of Stardock.*
 
+**Game files:** UQM is open source and its content packages are free, so `build-uqm.sh` downloads them for you (about 150 MB of data); there is nothing of a commercial game to bring.
+
 UQM 0.8.0 with a purpose-built 3DS platform layer. No emulation, no scaling:
 the game's native 320x240 frame is shown pixel-for-pixel.
 
@@ -26,6 +28,8 @@ run it straight from the PC: hold Y in the Homebrew Launcher, then
 On the SD card: `sdmc:/3ds/uqm.3dsx` (directly in `/3ds`), data in `sdmc:/3ds/uqm/content/packages/`,
 saves in `sdmc:/3ds/uqm/save/`, errors in `sdmc:/3ds/uqm/uqm.log`.
 Sound needs `sdmc:/3ds/dspfirm.cdc` (same as every other homebrew with audio).
+
+Saving: EXIT GAME (and HOME > Close) saves into the reserved slot 50 ("Exit save") while you are flying; the previous exit save is kept if the write fails, and a failed save asks "Exit anyway?". `uqm.cfg` and `port3ds.cfg` are written through a temporary file and only when they changed.
 
 ## Screens and controls
 
