@@ -266,16 +266,6 @@ rw("uqm/intro.c",
    "\tif (PulsedInputState.menu[KEY_MENU_CANCEL]\n",
    "port3ds_intro_skip (")
 
-# ---- UQ-X2: the main menu takes taps from its first frame ---------------------------
-# Upstream sleeps through the half-second fade-in before the menu reads any input; the deck's
-# buttons only appeared after it and a tap in that moment was lost. The fade runs by itself.
-rw("uqm/restart.c",
-   "\t\tpMS->Initialized = TRUE;\n\n\t\tSleepThreadUntil (FadeScreen (FadeAllToColor, ONE_SECOND / 2));\n",
-   "\t\tpMS->Initialized = TRUE;\n\n#ifdef __3DS__\n\t\tFadeScreen (FadeAllToColor, ONE_SECOND / 2);\n"
-   "\t\tport3ds_menu_seen (P3M_MAIN, pMS, pMS->CurState);\n#else\n"
-   "\t\tSleepThreadUntil (FadeScreen (FadeAllToColor, ONE_SECOND / 2));\n#endif\n",
-   "\t\tport3ds_menu_seen (P3M_MAIN, pMS, pMS->CurState);\n#else\n")
-
 # ---- UQ-Q1: CONTINUE on the main menu loads the exit save (slot 50) -----------------
 # The deck asks (port3ds_request_continue) and picks Load Game; here the list is not shown and
 # slot 50 is loaded. The list's own fade-in is done by hand: after a load the game draws with a
@@ -304,6 +294,16 @@ rw("uqm/starbase.c",
    "\tSetMenuSounds (MENU_SOUND_ARROWS, MENU_SOUND_SELECT);\n#ifdef __3DS__\n\tif (pMS->Initialized)\n\t\tport3ds_menu_seen (P3M_STARBASE, pMS, pMS->CurState);\n#endif\n\n"
    "\tif (!pMS->Initialized)\n\t{\n\t\tLastActivity &= ~CHECK_LOAD;\n",
    "port3ds_menu_seen (P3M_STARBASE")
+
+# ---- UQ-X2: the main menu takes taps from its first frame ---------------------------
+# Upstream sleeps through the half-second fade-in before the menu reads any input; the deck's
+# buttons only appeared after it and a tap in that moment was lost. The fade runs by itself.
+rw("uqm/restart.c",
+   "\t\tpMS->Initialized = TRUE;\n\n\t\tSleepThreadUntil (FadeScreen (FadeAllToColor, ONE_SECOND / 2));\n",
+   "\t\tpMS->Initialized = TRUE;\n\n#ifdef __3DS__\n\t\tFadeScreen (FadeAllToColor, ONE_SECOND / 2);\n"
+   "\t\tport3ds_menu_seen (P3M_MAIN, pMS, pMS->CurState);\n#else\n"
+   "\t\tSleepThreadUntil (FadeScreen (FadeAllToColor, ONE_SECOND / 2));\n#endif\n",
+   "\t\tport3ds_menu_seen (P3M_MAIN, pMS, pMS->CurState);\n#else\n")
 
 # Super Melee setup: buttons and fleet slots from the deck
 rw("uqm/supermelee/melee.c",
