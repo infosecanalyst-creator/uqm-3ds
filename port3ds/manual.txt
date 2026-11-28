@@ -10,7 +10,8 @@ This is The Ur-Quan Masters, the open-source release of the classic 1992 space a
 - Circle Pad or C-stick: scroll. Hold to keep scrolling. You can also drag the stylus up or down on the touch screen.
 - D-pad: move between the section buttons.
 - L and R: previous and next section.
-- B, Start or ZR: close. The game waits while you read, and the manual opens again where you left it.
+- B, START or ZR: close. The game waits while you read, and the manual opens again where you left it.
+- Left hand (button beside Close): swaps the D-pad with the A/B/X/Y buttons. The same switch is in the START menu.
 
 # Getting started
 The Ur-Quan Masters runs on the New Nintendo 3DS and New 3DS XL.
@@ -28,14 +29,15 @@ Every update after that is the same, without --uqm-data.
 - sdmc:/3ds/dspfirm.cdc: the sound firmware every homebrew game needs (run DSP1 once).
 
 ## The main menu
-| New Game | Start the adventure. You name your captain and ship.
+| Continue | Shown when you left with Exit game while flying: loads that exit save (slot 50) at once. X does the same.
+| New Game | Start the adventure. The story so far plays first: A shows the next slide, B or SKIP INTRO (touch screen) skips all of it. Then you are in the Sol system: Earth is the third planet from the sun.
 | Load Game | Pick a saved game.
 | Play Super Melee | Ship-against-ship battles, against the computer or a friend.
 | Setup | Music, speech, subtitles, menu style and more.
 | Quit | Back to the Homebrew Launcher.
 | Manual | This manual.
 
-Tap a choice, or use the D-pad and A.
+Tap a choice, or use the D-pad and A. The buttons take taps as soon as the menu appears.
 
 # The two screens
 ## Touch screen: the game
@@ -52,6 +54,9 @@ You never need to touch it. While flying it shows the galaxy map around your shi
 ## Swapping screens: ZL
 ZL puts the game on the top screen instead, filling it, with stereo 3D, and turns the touch screen into a control panel: galaxy map, menu buttons, replies and the Super Melee grid. Press ZL again to swap back. The game remembers your choice.
 
+## Stereo 3D
+Stereo 3D works when the game is on the top screen (press ZL), in HyperSpace, solar systems, orbit and combat. The starfield sits deep behind the screen, the solar system sits behind your ship, and an orbiting planet floats in front. Ships, shots, text and the status panel stay at screen depth, so nothing you aim at is doubled. With the slider at zero nothing extra is drawn.
+
 # Controls
 | A | Select. In combat: fire.
 | B | Back. In flight: ship menu. In combat: special ability.
@@ -59,16 +64,16 @@ ZL puts the game on the top screen instead, filling it, with stereo 3D, and turn
 | X | Special action in some menus.
 | Pad | D-pad, Circle Pad and C-stick: move, steer, turn.
 | L and R | Page up and down in lists, zoom the starmap.
-| START | Port menu: Resume, Manual, Left hand, Exit game. Exit game saves first (see Saving). The game's own pause is the II button.
+| START | Port menu: Resume, Manual, Save game, Load game, Left hand, Exit game. Save game and Load game open the game's own save list; they work while you are flying and are grey elsewhere ("in flight only"). Exit game saves first (see The exit save). B or START closes the menu. The game's own pause is the II button.
 | SELECT | In combat: retreat (when allowed). When typing: cancel.
-| Hold SELECT | Quit: ends a Super Melee battle, or leaves the game for the main menu. Asks first, with big buttons on the touch screen.
+| Hold SELECT | Quit: ends a Super Melee battle, or leaves the game for the main menu. Asks first (YES / NO on the touch screen, NO is the default). This way out does not save: choose NO, then START and Save game, to save first.
 | ZL | Swap the two screens.
 | ZR | This manual.
 
 ## Touch, while flying
 | Tap space | Fly to that spot. In HyperSpace: cruise in that direction.
 | Hold | Steer toward the stylus.
-| MENU | Open the ship menu.
+| MENU | Open the ship menu. The five buttons along the top are see-through so the game shows behind them; the one under the stylus turns solid.
 | MAP | The galaxy map, for setting a course.
 | II | Pause.
 | ? | This manual.
@@ -106,12 +111,12 @@ Tap MENU (or press B) while flying. The ship menu appears as big buttons; the hi
 Some menu styles group Devices, Cargo and Roster under Manifest. The buttons work either way.
 
 ## Saving
-Game, then Save Game, then pick a slot. Save often, especially before a fight or a long trip.
+START, then Save game, then pick a slot (or MENU, Game, Save Game: the same list). Save often, especially before a fight or a long trip.
 
 ## The exit save
-Slot 50 is kept for the exit save (named Exit save). Exit game in the START menu saves there first, then leaves, while you are flying in HyperSpace or in a star system. It does not save in a menu, in a conversation, in combat or in Super Melee; there it says "Anything not saved is lost." Closing the game from the HOME menu (HOME, then Close) makes the same save first, waiting up to 6 seconds for it.
+Slot 50 is kept for the exit save (named Exit save). Exit game in the START menu saves there first, then leaves, while you are flying in HyperSpace or in a star system. It does not save in a menu, in a conversation, in combat or in Super Melee; there it says "Not saved here: unsaved progress is lost." The question is "Exit Ur-Quan Masters?" with YES on the left and NO on the right; NO is the default. Closing the game from the HOME menu (HOME, then Close) makes the same save first, waiting up to 6 seconds for it.
 
-Slot 50 keeps its previous copy: the exit save is written beside it, and if the write fails the old Exit save is put back. If the save fails the game says "Not saved!" and asks "Exit anyway? Unsaved progress is lost." with NO to stay; it never closes after a failed save without asking. A save counts as failed if its file cannot be closed properly (a full SD card). Load it from Game, then Load Game, slot 50. Use slots 1 to 49 for your own saves.
+Slot 50 keeps its previous copy: the exit save is written beside it, and if the write fails the old Exit save is put back. If the save fails the game says "Not saved!" and asks "Exit anyway? Unsaved progress is lost." with NO to stay; it never closes after a failed save without asking. A save counts as failed if its file cannot be closed properly (a full SD card). To come back, choose Continue on the main menu (or load slot 50 from any Load Game list). Use slots 1 to 49 for your own saves.
 
 # Planets
 ## In orbit
@@ -168,7 +173,7 @@ Ship-against-ship battles with fleets you build.
 ## In battle
 Before each round, pick the ship to send in from your remaining ships, or RANDOM SHIP. The computer picks its own.
 
-To stop a battle early, hold SELECT and tap END BATTLE. Quit on the Super Melee screen goes back to the main menu.
+To stop a battle early, hold SELECT and tap YES. Quit on the Super Melee screen goes back to the main menu.
 
 # Netplay
 Super Melee over Wi-Fi against another 3DS running this port, or against The Ur-Quan Masters 0.8.0 on a PC.
@@ -181,9 +186,6 @@ DELAY trades responsiveness for smoothness on a slow network. Both 3DS need to b
 
 While a side is set to Net, the HOME button and closing the lid do nothing, because either would cut the connection. Set the side back to Human or a computer player to use them again.
 
-# Stereo 3D
-Stereo 3D works when the game is on the top screen (press ZL), in HyperSpace, solar systems, orbit and combat. The starfield sits deep behind the screen, the solar system sits behind your ship, and an orbiting planet floats in front. Ships, shots, text and the status panel stay at screen depth, so nothing you aim at is doubled. With the slider at zero nothing extra is drawn.
-
 # Settings and files
 ## Settings
 Setup (main menu) changes music, speech, subtitles, the menu style (PC or 3DO) and melee zoom. Game, then Settings (ship menu) switches sound and music, sets how fast the computer fights, and renames your captain or ship.
@@ -191,7 +193,7 @@ Setup (main menu) changes music, speech, subtitles, the menu style (PC or 3DO) a
 ## Files on the SD card
 | save/ | Your saved games (in sdmc:/3ds/uqm/).
 | uqm.cfg | The game's settings.
-| port3ds.cfg | Which screen the game is on, FPS and left-handed play. It, like uqm.cfg, is written only when something changed, through a temporary file.
+| port3ds.cfg | Which screen the game is on, FPS and left-handed play. It, like uqm.cfg, is written only when something changed, through a temporary file. If it cannot be written the top screen says "Settings not saved" for a few seconds.
 | uqm.log | Errors and start and exit lines, for bug reports.
 | manual.txt | Replaces this manual (see the last section).
 

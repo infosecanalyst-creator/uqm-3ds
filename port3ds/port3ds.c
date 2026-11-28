@@ -148,7 +148,7 @@ file_exists (const char *path)
 	return stat (path, &st) == 0;
 }
 
-static void
+static int
 write_file (const char *path, const char *text)
 {
 	/* temp file + checked write/close + rename: a power cut or a full card never
@@ -159,12 +159,16 @@ write_file (const char *path, const char *text)
 	snprintf (tmp, sizeof tmp, "%s.tmp", path);
 	f = fopen (tmp, "w");
 	if (!f)
-		return;
+		return 0;
 	ok = fputs (text, f) >= 0;
 	if (fclose (f) != 0)
 		ok = 0;
 	if (!ok || rename (tmp, path) != 0)
+	{
 		remove (tmp);
+		return 0;
+	}
+	return 1;
 }
 
 static int
@@ -345,6 +349,7 @@ static u64 stat_second_start = 0;
 /* left-handed play: the D-pad and the face buttons swap places
  * (Y<->Up, A<->Right, B<->Down, X<->Left), applied where HID is read */
 static int lefty = 0;
+static u64 settings_warn_until = 0;   /* "Settings not saved" in the hint strip until then */
 
 static u32
 lefty_remap (u32 m)
@@ -373,7 +378,11 @@ save_port_settings (void)
 	if (!strcmp (buf, last))
 		return;   /* UQ-08: write only on change */
 	strcpy (last, buf);
-	write_file (PORT3DS_ROOT "/port3ds.cfg", buf);
+	if (!write_file (PORT3DS_ROOT "/port3ds.cfg", buf))
+	{	/* UQ-Q2: say so once in the hint strip, and try again at the next change */
+		last[0] = '\0';
+		settings_warn_until = osGetTime () + 5000;
+	}
 }
 
 static void
@@ -467,7 +476,8 @@ enum {
 	ACT_REPLY, ACT_REPLY_MORE, ACT_SKIP, ACT_REPLAY,
 	ACT_MAP, ACT_GO, ACT_ZOOM_IN, ACT_ZOOM_OUT, ACT_SHIP, ACT_SHORTCUT,
 	ACT_MENU, ACT_PICK, ACT_NET, ACT_GAME, ACT_TAB_MENU, ACT_TAB_MAP, ACT_MAP_CLOSE,
-	ACT_MELEE_OPT, ACT_MELEE_SLOT, ACT_MELEE_SHIP, ACT_MELEE_CANCEL, ACT_CONFIRM, ACT_PORT
+	ACT_MELEE_OPT, ACT_MELEE_SLOT, ACT_MELEE_SHIP, ACT_MELEE_CANCEL, ACT_CONFIRM, ACT_PORT,
+	ACT_INTRO_SKIP, ACT_CONTINUE
 };
 typedef struct { short x, y, w, h; short act, arg; } Region;
 static Region regions[64];
@@ -958,6 +968,13 @@ static const Legend legend_talk[] = {
 static const Legend legend_starbase[] = {
 	{"PAD", "Move"}, {"A", "Select"}, {"B", "Back"}, {"UP/DOWN", "Buy / sell"},
 	{"START", "Menu"}, {"HOLD SELECT", "Quit"}, {NULL, NULL} };
+static const Legend legend_intro[] = {
+	{"A", "Next slide"}, {"B", "Skip the intro"}, {"START", "Menu"}, {NULL, NULL} };
+static const Legend legend_main[] = {
+	{"PAD", "Move"}, {"A", "Select"}, {"ZR", "Manual"}, {"START", "Menu"}, {NULL, NULL} };
+static const Legend legend_main_cont[] = {
+	{"PAD", "Move"}, {"A", "Select"}, {"X", "Continue"}, {"ZR", "Manual"},
+	{"START", "Menu"}, {NULL, NULL} };
 static const Legend legend_text[] = {
 	{"UP/DOWN", "Pick letter"}, {"LEFT/RIGHT", "Move"},
 	{"A", "Done"}, {"SELECT", "Cancel"}, {NULL, NULL} };
@@ -995,8 +1012,12 @@ draw_legend_list (int ox, const Legend *lg, int y0)
 
 /* ---- the deck ---- */
 enum { MODE_LEGEND, MODE_NAV, MODE_REPLIES, MODE_TALK, MODE_TEXT, MODE_HELP,
-	MODE_MENU, MODE_MELEE, MODE_PICK, MODE_NET, MODE_CONFIRM, MODE_PORT };
-/* the START port menu (same in every port): RESUME / MANUAL / LEFT HAND / EXIT GAME */
+	MODE_MENU, MODE_MELEE, MODE_PICK, MODE_NET, MODE_CONFIRM, MODE_PORT, MODE_INTRO };
+/* the START port menu (house shape): RESUME / MANUAL / SAVE GAME / LOAD GAME / LEFT HAND / EXIT GAME */
+#define PMENU_N 6
+enum { PM_RESUME, PM_MANUAL, PM_SAVE, PM_LOAD, PM_LEFTY, PM_EXIT };
+/* UQ-Q1: the exit save (slot 50) is there: the main menu offers CONTINUE */
+static int have_exit_save = 0;
 static int pmenu_on = 0, pmenu_quit = 0, pmenu_focus = 0;
 static int pm_saving = 0;            /* EXIT GAME: waiting for the slot-50 save */
 static u64 pm_save_t0;
@@ -1028,6 +1049,8 @@ deck_mode (void)
 		return MODE_TEXT;
 	if (netdlg_on)
 		return MODE_NET;
+	if (port3ds_intro_state ())
+		return MODE_INTRO;
 	if (pick_on[0] || pick_on[1])
 		return MODE_PICK;
 	if (melee_on)
@@ -1052,6 +1075,7 @@ mode_title (int mode)
 		case MODE_CONFIRM: return "QUIT";
 		case MODE_PORT: return pmenu_quit ? "EXIT GAME" : "MENU";
 		case MODE_TEXT: return "ENTER A NAME";
+		case MODE_INTRO: return "THE STORY SO FAR";
 		case MODE_REPLIES: return "YOUR REPLY";
 		case MODE_TALK: return "ENCOUNTER";
 		case MODE_MELEE: return "SUPER MELEE";
@@ -1162,7 +1186,8 @@ draw_menu (int ox)
 		y = 52;
 	}
 	{	/* rule 11: rows >= 24 px, 4 apart, ending 6 px above the edge; two columns when needed */
-		const int n = menu_n + (menu_base == P3M_MAIN);   /* + MANUAL on the main menu */
+		const int cont = (menu_base == P3M_MAIN && have_exit_save);   /* UQ-Q1: CONTINUE first */
+		const int n = menu_n + (menu_base == P3M_MAIN) + cont;   /* + MANUAL on the main menu */
 		const int y0 = y;
 		int cols = 1, rows = n > 0 ? n : 1, cw = 308;
 		h = (234 - y0 + gap) / rows - gap;
@@ -1176,11 +1201,14 @@ draw_menu (int ox)
 		for (i = 0; i < n; ++i)
 		{
 			const int bx = ox + 6 + (i / rows) * (cw + 4), by = y0 + (i % rows) * (h + gap);
-			if (i == menu_n)
+			const int k = i - cont;
+			if (k < 0)
+				button (bx, by, cw, h, "CONTINUE (EXIT SAVE)", ACT_CONTINUE, 0, 0, 0, h >= 18);
+			else if (k == menu_n)
 				button (bx, by, cw, h, "MANUAL", ACT_HELP, 0, 0, 0, h >= 18);
 			else
-				button (bx, by, cw, h, menu_items[i].label, ACT_MENU, i,
-						menu_items[i].state == menu_cur, 0, h >= 18);
+				button (bx, by, cw, h, menu_items[k].label, ACT_MENU, k,
+						menu_items[k].state == menu_cur, 0, h >= 18);
 		}
 	}
 }
@@ -1666,16 +1694,17 @@ static void
 draw_man_buttons (int ox)
 {
 	int i;
-	/* rule 11: 2 x 8 cells of 152x24, 4 px apart, y 6..226 (the manual page has no header) */
-	for (i = 0; i <= man_nsec && i < 16; ++i)
+	/* rule 11: 2 x 8 cells of 152x24, 4 px apart, y 6..226 (the manual page has no header).
+	   House shape: the section buttons, then "Left hand: off" and "Close" in the last row. */
+	const int nsec = man_nsec < 14 ? man_nsec : 14;
+	for (i = 0; i < nsec; ++i)
 	{
 		const int c = i & 1, r = i / 2;
-		if (i == man_nsec)
-			button (ox + 6 + c * 156, 6 + r * 28, 152, 24, "CLOSE", ACT_HELP_CLOSE, 0, 0, 0, 0);
-		else
-			button (ox + 6 + c * 156, 6 + r * 28, 152, 24, man_secs[i].title,
-					ACT_MAN_SEC, i, i == man_cur, 0, 0);
+		button (ox + 6 + c * 156, 6 + r * 28, 152, 24, man_secs[i].title,
+				ACT_MAN_SEC, i, i == man_cur, 0, 0);
 	}
+	button (ox + 6, 6 + 7 * 28, 152, 24, lefty ? "Left hand: on" : "Left hand: off", ACT_LEFTY, 0, 0, 0, 0);
+	button (ox + 6 + 156, 6 + 7 * 28, 152, 24, "Close", ACT_HELP_CLOSE, 0, 0, 0, 0);
 }
 
 static void
@@ -1730,6 +1759,10 @@ draw_deck (void)
 			break;
 		case MODE_NET:
 			draw_net (ox);
+			break;
+		case MODE_INTRO:
+			draw_legend_list (ox, legend_intro, 42);
+			button (ox + 60, 150, 200, 50, "SKIP INTRO >>", ACT_INTRO_SKIP, 0, 0, 0, 1);
 			break;
 		case MODE_TALK:
 			draw_legend_list (ox, legend_talk, 42);
@@ -1890,16 +1923,21 @@ draw_dash_flight (void)
 	else
 	{
 		text (px, y, "No course set", COL_DIM, 0);
+		y += 13;
+		if (ship.star >= 0 && !ship.in_orbit)
+		{	/* UQ-X5: the first minute of a new game */
+			port3ds_star_name (ship.star, name, sizeof name);
+			if (!strcmp (name, "Sol"))
+				text (px, y, "Earth: the 3rd planet", COL_TEXT, 0);
+		}
 		y += 18;
 	}
 	if (steer_mode)
 		text (px, y, steer_mode == 1 ? "Steering" : "Flying by touch", COL_HOT, 0);
-	y = 159;   /* five lines, the last one ends above the footer line (y 226) */
-	text (px, y, "Tap space: fly there", COL_DIM, 0); y += 13;
-	text (px, y, "Hold: steer", COL_DIM, 0); y += 13;
-	text (px, y, "MAP: set a course", COL_DIM, 0); y += 13;
-	text (px, y, "MENU: ship menu", COL_DIM, 0); y += 13;
-	text (px, y, "ZL: game on top, 3D", COL_DIM, 0);
+	y = 183;   /* UQ-U3: three white lines, the last one ends above the footer strip (y 224) */
+	text (px, y, "Tap space: fly there", COL_TEXT, 0); y += 13;
+	text (px, y, "Hold stylus: steer", COL_TEXT, 0); y += 13;
+	text (px, y, "MAP course, MENU ship", COL_TEXT, 0);
 }
 
 static void
@@ -1947,8 +1985,12 @@ draw_dashboard (void)
 	text (394 - text_w (buf, 0), 5, buf, COL_DIM, 0);
 	/* the hint strip: same place in every port, always shown */
 	fill (0, 224, 400, 16, COL_HINTBG);
-	text_center (0, 226, 400, mode == MODE_PORT ? "D-pad choose   A press   B / START close"
-			: "START menu   ZL swap screens   ZR manual", COL_ACCENT, 0);
+	if (settings_warn_until > osGetTime ())
+		text_center (0, 226, 400, "Settings not saved (SD card full or locked?)", COL_ACCENT, 0);
+	else
+		text_center (0, 226, 400, mode == MODE_PORT ? "D-pad choose   A press   B / START close"
+				: mode == MODE_INTRO ? (lefty ? "D-Right next slide   D-Down skip the intro" : "A next slide   B skip the intro")
+				: "START menu   ZL swap screens   ZR manual", COL_ACCENT, 0);
 
 	if (mode == MODE_HELP)
 	{
@@ -1978,7 +2020,25 @@ draw_dashboard (void)
 			draw_legend_list (40, legend_text, 34);
 			text_center (0, 200, 400, "OPEN KEYBOARD is on the touch screen", COL_DIM, 1);
 			break;
+		case MODE_INTRO:
+			/* UQ-U1 / UQ-X1: say what is happening and how to move on */
+			text_center (0, 40, 400, "The story before your mission begins.", COL_TEXT, 1);
+			draw_legend_list (40, legend_intro, 74);
+			text_center (0, 150, 400, "Each slide waits for you: A shows the next one.", COL_TEXT, 0);
+			text_center (0, 200, 400, "SKIP INTRO is on the touch screen", COL_DIM, 1);
+			break;
 		case MODE_MENU:
+			if (menu_base == P3M_MAIN)
+			{	/* UQ-U1: the title card */
+				text_center (0, 36, 400, "THE UR-QUAN MASTERS", COL_ACCENT, 1);
+				text_center (0, 54, 400, "Star Control II, for the New 3DS", COL_DIM, 0);
+				draw_legend_list (40, have_exit_save ? legend_main_cont : legend_main, 80);
+				if (have_exit_save)
+					text_center (0, 166, 400, "CONTINUE loads your exit save (slot 50).", COL_TEXT, 0);
+				text_center (0, 184, 400, "Build " PORT_VERSION, COL_DIM, 0);
+				text_center (0, 200, 400, "Tap a choice on the touch screen", COL_DIM, 1);
+				break;
+			}
 			draw_legend_list (40, legend_menu, 34);
 			text_center (0, 200, 400, "Tap a choice on the touch screen", COL_DIM, 1);
 			break;
@@ -1991,12 +2051,35 @@ draw_dashboard (void)
 
 /* ---- overlay (bottom, over the game) ---- */
 
+/* SAVE GAME and LOAD GAME open the game's own save / load list (ship menu > Game), which only
+   exists in flight; elsewhere the rows are grey and say so */
+static int
+pmenu_enabled (int i)
+{
+	if (i == PM_SAVE || i == PM_LOAD)
+		return flight_ctx () && port3ds_suspend_save_possible ();
+	return 1;
+}
+
+static void
+pmenu_move (int d)
+{	/* the D-pad steps over the grey rows */
+	int k, f = pmenu_focus;
+	for (k = 0; k < PMENU_N; ++k)
+	{
+		f = (f + d + PMENU_N) % PMENU_N;
+		if (pmenu_enabled (f))
+			break;
+	}
+	pmenu_focus = f;
+}
+
 /* the START port menu (ox: left edge), focus ring in gold, D-pad moves it */
 static void
 draw_port_menu (int ox, int y0)
 {
-	static const char *const items[] = { "RESUME", "MANUAL", "LEFT HAND", "EXIT GAME" };
-	int i, n, y;
+	static const char *const items[PMENU_N] = { "RESUME", "MANUAL", "SAVE GAME", "LOAD GAME", "LEFT HAND", "EXIT GAME" };
+	int i, y;
 	if (pmenu_quit)
 	{
 		if (pm_saving)
@@ -2017,8 +2100,10 @@ draw_port_menu (int ox, int y0)
 			}
 			return;
 		}
-		text_center (ox, y0 + 18, 320, "Leave the game?", COL_TEXT, 1);
-		text_center (ox, y0 + 40, 320, port3ds_suspend_save_possible () ? "Saved first to slot 50 (Exit save)." : "Anything not saved is lost.", COL_DIM, 0);
+		/* house wording: "Exit <Game>?", then whether it is saved first */
+		text_center (ox, y0 + 18, 320, "Exit Ur-Quan Masters?", COL_TEXT, 1);
+		text_center (ox, y0 + 40, 320, port3ds_suspend_save_possible () ? "It is saved first (slot 50, Exit save)."
+				: "Not saved here: unsaved progress is lost.", COL_DIM, 0);
 		for (i = 0; i < 2; ++i)
 		{	/* 0 = NO (focus starts here), 1 = YES */
 			const int bx = ox + (i ? 20 : 170);
@@ -2028,17 +2113,21 @@ draw_port_menu (int ox, int y0)
 		}
 		return;
 	}
-	n = (int) (sizeof items / sizeof items[0]);
-	y = y0 + 8;
-	for (i = 0; i < n; ++i, y += 40)
+	if (deck_px == ovl_buf)   /* the build, in the page's header bar (git describe of uqm-3ds) */
+		text (ox + 314 - text_w ("Build " PORT_VERSION, 0), y0 - 24, "Build " PORT_VERSION, COL_DIM, 0);
+	/* six rows of 28 px, 4 px apart, 6 px from the header and the edges (rule 11) */
+	y = y0 + 6;
+	for (i = 0; i < PMENU_N; ++i, y += 32)
 	{
 		char lab[24];
-		snprintf (lab, sizeof lab, "%s%s", items[i], i == 2 ? (lefty ? ": ON" : ": OFF") : "");
-		if (pmenu_focus == i)
-			box (ox + 37, y - 3, 240 + 6, 32 + 6, COL_HOT, COL_BG);
-		button (ox + 40, y, 240, 32, lab, ACT_PORT, i, i == 2 && lefty, 0, 1);
+		const int on = pmenu_enabled (i);
+		snprintf (lab, sizeof lab, "%s%s", items[i], i == PM_LEFTY ? (lefty ? ": ON" : ": OFF") : "");
+		if (pmenu_focus == i && on)
+			box (ox + 37, y - 3, 240 + 6, 28 + 6, COL_HOT, COL_BG);
+		button (ox + 40, y, 240, 28, lab, ACT_PORT, i, i == PM_LEFTY && lefty, !on, 1);
+		if (!on)   /* why it is grey, inside the row */
+			text (ox + 40 + 240 - 6 - text_w ("in flight only", 0), y + (28 - FONT_SMALL_H) / 2, "in flight only", COL_OFF, 0);
 	}
-	text_center (ox, y0 + 170, 320, "Build " PORT_VERSION, COL_DIM, 0);   /* git describe of uqm-3ds */
 }
 
 static void
@@ -2046,11 +2135,19 @@ port_menu_act (int a)
 {
 	switch (a)
 	{
-		case 0: pmenu_on = 0; break;
-		case 1: pmenu_on = 0; man_open (); break;
-		case 2: do_action (ACT_LEFTY, 0, 0, 0); break;
-		case 3: pmenu_quit = 1; pmenu_focus = 0; break;
-		case 10: pmenu_quit = 0; pmenu_focus = 3; break;
+		case PM_RESUME: pmenu_on = 0; break;
+		case PM_MANUAL: pmenu_on = 0; man_open (); break;
+		case PM_SAVE:
+		case PM_LOAD:
+			/* UQ-X3: straight to the game's own save / load list (ship menu > Game) */
+			if (!pmenu_enabled (a))
+				break;
+			pmenu_on = 0;
+			port3ds_request_shortcut (a == PM_SAVE ? P3SC_SAVE : P3SC_LOAD);
+			break;
+		case PM_LEFTY: do_action (ACT_LEFTY, 0, 0, 0); break;
+		case PM_EXIT: pmenu_quit = 1; pmenu_focus = 0; break;
+		case 10: pmenu_quit = 0; pmenu_focus = PM_EXIT; break;
 		case 11:
 			if (pmenu_quit == 2)
 				close_now ();   /* EXIT ANYWAY after a failed save */
@@ -2067,18 +2164,23 @@ port_menu_act (int a)
 	deck_dirty = 1;
 }
 
-/* the game's "really quit?" window, as two big buttons (ox: left edge) */
+/* the game's "really quit?" window (hold SELECT) in the house shape: YES on the left, NO on
+   the right; the game starts on NO (ox: left edge) */
 static void
 draw_confirm (int ox)
 {
 	const int mel = port3ds_in_melee ();
 	const char *q = mel ? "End this battle?" : "Quit to the main menu?";
-	const char *n1 = mel ? "Back to the Super Melee screen." : "Anything not saved is lost.";
-	text (ox + (320 - text_w (q, 1)) / 2, 50, q, COL_TEXT, 1);
-	text (ox + (320 - text_w (n1, 0)) / 2, 72, n1, COL_DIM, 0);
-	button (ox + 20, 100, 280, 50, mel ? "END BATTLE" : "QUIT TO MAIN MENU", ACT_CONFIRM, 1,
-			confirm_resp, 0, 1);
-	button (ox + 20, 162, 280, 50, "KEEP PLAYING", ACT_CONFIRM, 2, !confirm_resp, 0, 1);
+	text_center (ox, 50, 320, q, COL_TEXT, 1);
+	if (mel)
+		text_center (ox, 74, 320, "Back to the Super Melee screen.", COL_DIM, 0);
+	else
+	{	/* UQ-X4: this way out does not save; say how to */
+		text_center (ox, 74, 320, "Not saved here: unsaved progress is lost.", COL_DIM, 0);
+		text_center (ox, 90, 320, "To save first: NO, then START > SAVE GAME.", COL_DIM, 0);
+	}
+	button (ox + 20, 124, 130, 44, "YES", ACT_CONFIRM, 1, confirm_resp, 0, 1);
+	button (ox + 170, 124, 130, 44, "NO", ACT_CONFIRM, 2, !confirm_resp, 0, 1);
 }
 
 static void
@@ -2100,11 +2202,25 @@ draw_ovl_tabs (void)
 	static const struct { const char *l; int act; int w; } t[] = {
 		{ "MENU", ACT_TAB_MENU, 56 }, { "MAP", ACT_TAB_MAP, 56 }, { "II", ACT_PAUSE, 34 },
 		{ "?", ACT_HELP, 34 }, { "SWAP", ACT_SWAP, 56 } };
-	int i, x = 6;
+	int i, x = 6, held = 0;
 	for (i = 0; i < 5; ++i)
-	{	/* rule 11: 24 px tall, 4 apart, 6 px from the edges */
-		button (x, 6, t[i].w, 24, t[i].l, t[i].act, 0, 0, 0, 0);
+	{	/* rule 11: 30 px tall (the most used buttons), 4 apart, 6 px from the edges */
+		button (x, 6, t[i].w, 30, t[i].l, t[i].act, 0, 0, 0, 0);
+		if (touch_live && touch_act == t[i].act)
+			held = 1;
 		x += t[i].w + 4;
+	}
+	if (!held)
+	{	/* UQ-U2: the row lies over the top of the game picture, so it is see-through
+		   (the game shows behind it) until the stylus is on one of its buttons */
+		int px, py;
+		for (py = 6; py < 36; ++py)
+			for (px = 6; px < x; ++px)
+			{
+				u32 *o = &ovl_buf[py * 320 + px];
+				if ((*o & 0xFF) == 0xFF)
+					*o = SHADE (*o, 0x80);
+			}
 	}
 	if (steer_mode == 2)
 	{	/* where the ship is flying to */
@@ -2124,7 +2240,8 @@ draw_ovl_menu (void)
 {
 	/* rule 11: rows >= 24 px, 4 apart, 6 px from the edges; two columns when one is too tall */
 	const int top = 6, bot = 234;
-	const int n = menu_n + (menu_base == P3M_MAIN);   /* + MANUAL on the main menu */
+	const int cont = (menu_base == P3M_MAIN && have_exit_save);   /* UQ-Q1: CONTINUE first */
+	const int n = menu_n + (menu_base == P3M_MAIN) + cont;   /* + MANUAL on the main menu */
 	int i, h, gap = 4, total, y, cols = 1, rows, w = 240, x = 6;
 	if (menu_n <= 0)
 		return;
@@ -2143,11 +2260,14 @@ draw_ovl_menu (void)
 	for (i = 0; i < n; ++i)
 	{
 		const int bx = x + (i / rows) * (w + 4), by = y + (i % rows) * (h + gap);
-		if (i == menu_n)
+		const int k = i - cont;
+		if (k < 0)
+			button (bx, by, w, h, "CONTINUE (EXIT SAVE)", ACT_CONTINUE, 0, 0, 0, h >= 18);
+		else if (k == menu_n)
 			button (bx, by, w, h, "MANUAL", ACT_HELP, 0, 0, 0, h >= 18);
 		else
-			button (bx, by, w, h, menu_items[i].label, ACT_MENU, i,
-					menu_items[i].state == menu_cur, 0, h >= 18);
+			button (bx, by, w, h, menu_items[k].label, ACT_MENU, k,
+					menu_items[k].state == menu_cur, 0, h >= 18);
 	}
 }
 
@@ -2241,6 +2361,9 @@ draw_overlay (void)
 			break;
 		case MODE_REPLIES:
 			draw_ovl_replies ();
+			break;
+		case MODE_INTRO:
+			button (204, 206, 110, 28, "SKIP INTRO >>", ACT_INTRO_SKIP, 0, 0, 0, 0);
 			break;
 		case MODE_TALK:
 			button (6, 206, 96, 28, "<< REPLAY", ACT_REPLAY, 0, 0, 0, 0);
@@ -3010,6 +3133,15 @@ do_action (int act, int arg, int px, int py)
 		case ACT_MELEE_CANCEL: melee_pick_side = melee_pick_slot = -1; break;
 		case ACT_CONFIRM: port3ds_confirm_act (arg); break;
 		case ACT_PORT: port_menu_act (arg); break;
+		case ACT_INTRO_SKIP: port3ds_intro_request_skip (); break;
+		case ACT_CONTINUE:
+			/* UQ-Q1: the game's own Load Game, told to take slot 50 without showing the list */
+			if (menu_base == P3M_MAIN && have_exit_save)
+			{
+				port3ds_request_continue ();
+				port3ds_menu_pick (P3M_MAIN, 1);   /* 1 = LOAD_SAVED_GAME (restart.c) */
+			}
+			break;
 	}
 	deck_dirty = 1;
 }
@@ -3202,7 +3334,6 @@ port3ds_pump_input (void)
 	}
 	else if (pmenu_on && help_page < 0)
 	{
-		const int n = pmenu_quit ? 2 : 4;
 		if (kdown & KEY_B)
 		{
 			if (pmenu_quit) port_menu_act (10);
@@ -3213,12 +3344,13 @@ port3ds_pump_input (void)
 			port_menu_act (pmenu_quit ? 10 + pmenu_focus : pmenu_focus);
 		else if (kdown & (pmenu_quit ? (KEY_DLEFT | KEY_DRIGHT | KEY_DUP | KEY_DDOWN) : (KEY_DUP | KEY_DLEFT)))
 		{
-			pmenu_focus = pmenu_quit ? !pmenu_focus : (pmenu_focus + n - 1) % n;
+			if (pmenu_quit) pmenu_focus = !pmenu_focus;
+			else pmenu_move (-1);
 			deck_dirty = 1;
 		}
 		else if (!pmenu_quit && (kdown & (KEY_DDOWN | KEY_DRIGHT)))
 		{
-			pmenu_focus = (pmenu_focus + 1) % n;
+			pmenu_move (1);
 			deck_dirty = 1;
 		}
 	}
@@ -3346,6 +3478,27 @@ port3ds_pump_input (void)
 		tap_vk = -1;
 	}
 
+	{	/* the new-game story: the deck shows SKIP INTRO while it plays */
+		static int was_intro = 0;
+		const int now_intro = port3ds_intro_state ();
+		if (now_intro != was_intro)
+		{
+			was_intro = now_intro;
+			deck_dirty = 1;
+		}
+	}
+	if (settings_warn_until)
+	{	/* the "Settings not saved" line comes and goes with a redraw */
+		static int shown = 0;
+		const int on = settings_warn_until > osGetTime ();
+		if (on != shown)
+		{
+			shown = on;
+			deck_dirty = 1;
+		}
+		if (!on)
+			settings_warn_until = 0;
+	}
 	/* the deck follows what the game is doing */
 	{
 		const int ctx = port3ds_game_context ();
@@ -3376,9 +3529,19 @@ port3ds_pump_input (void)
 		int b = -1, c = 0, n;
 		u32 sig;
 		n = port3ds_menu_items (&b, &c, menu_items, P3_MENU_MAX);
+		if (n && b == P3M_MAIN && (menu_n == 0 || menu_base != P3M_MAIN))
+		{	/* the main menu just came up: is there an exit save to continue from? */
+			const int have = file_exists (PORT3DS_ROOT "/save/uqmsave.49");
+			if (have != have_exit_save)
+				deck_dirty = 1;
+			have_exit_save = have;
+		}
 		menu_n = n;
 		menu_base = b;
 		menu_cur = c;
+		if (n && b == P3M_MAIN && have_exit_save && (kdown & KEY_X)
+				&& help_page < 0 && !pmenu_on && !confirm_on)
+			do_action (ACT_CONTINUE, 0, 0, 0);   /* X: CONTINUE, for play without the stylus */
 		sig = n ? ((u32) n << 24) ^ ((u32) b << 8) ^ (u32) c ^ 0x80000000u : 0;
 		if (n)
 		{
@@ -3734,7 +3897,7 @@ close_now (void)
 {
 	static int once = 0;
 	if (!once++)
-		apt_log ("closed from the HOME menu");
+		apt_log (pm_home_close ? "closed from the HOME menu" : "closed from EXIT GAME");
 #ifndef UQM3DS_HARNESS
 	port3ds_closing = 1;
 	net_stop ();

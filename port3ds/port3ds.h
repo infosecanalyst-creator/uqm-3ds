@@ -177,6 +177,18 @@ int port3ds_suspend_save_possible (void);
 void port3ds_request_suspend_save (void);
 int port3ds_suspend_save_state (void);   /* 0 none, 1 asked, 2 saved, 3 not possible */
 
+/* UQ-X1: the new-game story (restart.c runs Introduction between port3ds_intro (1) and (0)).
+ * SKIP INTRO on the deck, or B, ends every slide show of it at once: intro.c asks
+ * port3ds_intro_skip each frame (cancel = B was pressed) and stops when it says 1. */
+void port3ds_intro (int on);              /* game thread */
+int port3ds_intro_skip (int cancel);      /* game thread */
+int port3ds_intro_state (void);           /* deck: 1 while the story plays */
+void port3ds_intro_request_skip (void);   /* deck: SKIP INTRO */
+/* UQ-Q1: CONTINUE on the main menu: the next Load Game from the main menu loads the exit save
+ * (slot 50) without showing the list. Expires after 2 s if nothing takes it. */
+void port3ds_request_continue (void);     /* deck */
+int port3ds_take_continue (void);         /* game thread (gameopt.c): 1 = load slot 50 now */
+
 /* comm.c PlayerResponseInput(), game thread, once per frame while the
  * player is choosing: publishes the replies, returns a reply tapped on
  * the deck or -1 */

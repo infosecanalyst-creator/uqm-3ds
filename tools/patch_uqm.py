@@ -250,6 +250,45 @@ for rel, anchor in (("uqm/menu.c", '#include "libs/log.h"\n'),
                     ("libs/graphics/sdl/canvas.c", '#include "libs/graphics/cmap.h"\n')):
     rw(rel, anchor, anchor + INC, '#\tinclude "port3ds.h"')
 
+# ---- UQ-X1: the new-game story can be skipped in one go ---------------------------
+# restart.c marks the story; intro.c stops every slide show of it once SKIP INTRO (deck) or B
+# was pressed (upstream: B ends only the slide show that is playing, the next one starts).
+rw("uqm/restart.c",
+   "\t\t{\t// starting a new game\n\t\t\tIntroduction ();\n\t\t}\n",
+   "\t\t{\t// starting a new game\n#ifdef __3DS__\n\t\t\tport3ds_intro (1);\n#endif\n\t\t\tIntroduction ();\n"
+   "#ifdef __3DS__\n\t\t\tport3ds_intro (0);\n#endif\n\t\t}\n",
+   "port3ds_intro (1);")
+rw("uqm/intro.c", '#include "libs/log.h"\n', '#include "libs/log.h"\n' + INC, '#\tinclude "port3ds.h"')
+rw("uqm/intro.c",
+   "\tPRESENTATION_INPUT_STATE* pPIS = (PRESENTATION_INPUT_STATE*) pIS;\n\n\tif (PulsedInputState.menu[KEY_MENU_CANCEL]\n",
+   "\tPRESENTATION_INPUT_STATE* pPIS = (PRESENTATION_INPUT_STATE*) pIS;\n\n"
+   "#ifdef __3DS__\n\tif (port3ds_intro_skip (PulsedInputState.menu[KEY_MENU_CANCEL] != 0))\n\t\treturn FALSE;\n#endif\n"
+   "\tif (PulsedInputState.menu[KEY_MENU_CANCEL]\n",
+   "port3ds_intro_skip (")
+
+# ---- UQ-X2: the main menu takes taps from its first frame ---------------------------
+# Upstream sleeps through the half-second fade-in before the menu reads any input; the deck's
+# buttons only appeared after it and a tap in that moment was lost. The fade runs by itself.
+rw("uqm/restart.c",
+   "\t\tpMS->Initialized = TRUE;\n\n\t\tSleepThreadUntil (FadeScreen (FadeAllToColor, ONE_SECOND / 2));\n",
+   "\t\tpMS->Initialized = TRUE;\n\n#ifdef __3DS__\n\t\tFadeScreen (FadeAllToColor, ONE_SECOND / 2);\n"
+   "\t\tport3ds_menu_seen (P3M_MAIN, pMS, pMS->CurState);\n#else\n"
+   "\t\tSleepThreadUntil (FadeScreen (FadeAllToColor, ONE_SECOND / 2));\n#endif\n",
+   "\t\tport3ds_menu_seen (P3M_MAIN, pMS, pMS->CurState);\n#else\n")
+
+# ---- UQ-Q1: CONTINUE on the main menu loads the exit save (slot 50) -----------------
+# The deck asks (port3ds_request_continue) and picks Load Game; here the list is not shown and
+# slot 50 is loaded. The list's own fade-in is done by hand: after a load the game draws with a
+# screen transition and expects the screen not to be faded out.
+rw("uqm/gameopt.c",
+   "\t\tDrawMenuStateStrings (PM_SAVE_GAME, LOAD_GAME);\n\t\tsuccess\t= PickGame (FALSE, TRUE);\n",
+   "\t\tDrawMenuStateStrings (PM_SAVE_GAME, LOAD_GAME);\n#ifdef __3DS__\n\t\tif (port3ds_take_continue ())\n\t\t{\n"
+   "\t\t\tCONTEXT p3ctx = SetContext (ScreenContext);\n\t\t\tSetContextBackGroundColor (BLACK_COLOR);\n\t\t\tClearDrawable ();\n"
+   "\t\t\tSleepThreadUntil (FadeScreen (FadeAllToColor, ONE_SECOND / 10));\n\t\t\tSetContext (p3ctx);\n"
+   "\t\t\tsuccess = LoadGame (49, NULL);\n\t\t\tif (success)\n\t\t\t\tGLOBAL (CurrentActivity) |= CHECK_LOAD;\n"
+   "\t\t}\n\t\telse\n#endif\n\t\tsuccess\t= PickGame (FALSE, TRUE);\n",
+   "port3ds_take_continue ()")
+
 # every DoMenuChooser menu (ship, orbit, scan, game, settings, encounter, outfit, shipyard)
 rw("uqm/menu.c",
    "\tBOOLEAN useAltMenu = FALSE;\n\tif (optWhichMenu == OPT_PC)\n\t\tuseAltMenu = GetAlternateMenu (&BaseState, &NewState);\n",

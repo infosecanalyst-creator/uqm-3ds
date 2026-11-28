@@ -68,7 +68,8 @@ replaces it without a rebuild.
 | X | special action in menus |
 | D-pad, Circle Pad, C-stick | move / steer |
 | L / R | page up/down, starmap zoom |
-| START / SELECT | pause / retreat (when allowed), cancel name |
+| START | port menu: RESUME, MANUAL, SAVE GAME, LOAD GAME, LEFT HAND, EXIT GAME (saves to slot 50 first while flying; CONTINUE on the main menu loads it) |
+| SELECT | retreat (when allowed), cancel name; hold: quit to the main menu (asks, does not save) |
 | ZL / ZR | swap screens / manual |
 
 The layout choice and FPS persist in `sdmc:/3ds/uqm/port3ds.cfg`. UQM's own

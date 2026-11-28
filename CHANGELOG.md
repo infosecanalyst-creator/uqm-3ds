@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-11-27
+
+- New game: the story can be skipped in one go. SKIP INTRO is on the touch screen, B does the same, and the top screen says so ("A next slide, B skip the intro").
+- Main menu: CONTINUE (tap it or press X) loads the exit save, slot 50, when there is one. The buttons take taps as soon as the menu appears. The top screen shows a title card.
+- START menu in the house shape: RESUME, MANUAL, SAVE GAME, LOAD GAME, LEFT HAND, EXIT GAME. SAVE GAME and LOAD GAME open the game's own save list while flying and are grey elsewhere.
+- Exit question in the house wording: "Exit Ur-Quan Masters?", then "It is saved first (slot 50, Exit save)." or "Not saved here: unsaved progress is lost."
+- Hold SELECT (quit to the main menu) asks with YES / NO like every other question and says that it does not save.
+- Flight buttons (MENU, MAP, II, ?, SWAP) are 30 px tall and see-through, so the top of the game picture shows behind them; the one under the stylus turns solid.
+- Flight dashboard: the touch hints are white and three lines; in the Sol system it says "Earth: the 3rd planet" until a course is set.
+- Manual: "Left hand: off" and "Close" buttons in the house position; Stereo 3D is now part of The two screens.
+- A settings file that cannot be written says "Settings not saved" on the top screen. The log says "closed from EXIT GAME" when that is how the game was left.
+
 ## 2026-11-21
 
 - New game: the flight buttons (MENU, MAP, II, ?, SWAP) no longer sit on top of the story slides' first line of text.

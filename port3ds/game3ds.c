@@ -230,6 +230,48 @@ port3ds_game_frame (void *input_state)
 	}
 }
 
+/* ---- the new-game story and CONTINUE -------------------------------------- */
+
+static volatile int intro_on = 0, intro_skip = 0;
+
+void
+port3ds_intro (int on)
+{
+	intro_skip = 0;
+	intro_on = on;
+}
+
+int
+port3ds_intro_skip (int cancel)
+{
+	if (!intro_on)
+		return 0;
+	if (cancel)
+		intro_skip = 1;   /* B: not only this slide show, the whole story */
+	return intro_skip;
+}
+
+int port3ds_intro_state (void) { return intro_on; }
+void port3ds_intro_request_skip (void) { if (intro_on) intro_skip = 1; }
+
+static volatile int continue_req = 0;
+static volatile TimeCount continue_time;
+
+void
+port3ds_request_continue (void)
+{
+	continue_time = GetTimeCounter ();
+	continue_req = 1;
+}
+
+int
+port3ds_take_continue (void)
+{
+	const int r = continue_req && GetTimeCounter () - continue_time <= 2 * ONE_SECOND;
+	continue_req = 0;
+	return r;
+}
+
 /* ---- ship-menu shortcuts ------------------------------------------------- */
 
 static volatile int sc_item = -1, sc_gameopt = -1;
