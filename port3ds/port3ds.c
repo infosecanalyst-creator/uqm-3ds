@@ -2258,8 +2258,6 @@ draw_ovl_menu (void)
 		h = 34;
 	total = rows * (h + gap) - gap;
 	y = top + (bot - top - total) / 2;
-	if (menu_base == P3M_MAIN)   /* UQ-U4: the menu picture's top row carries a stray red line (x 164-318) */
-		fill (0, 0, 320, 1, RGB (0, 0, 0));
 	fill (x - 4 < 0 ? 0 : x - 4, y - 4, cols * w + (cols - 1) * 4 + 8, total + 8, SHADE (COL_BG, 0xC8));
 	for (i = 0; i < n; ++i)
 	{
